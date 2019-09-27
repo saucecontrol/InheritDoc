@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+
+	<PropertyGroup>
+		<InheritDocTaskTfm Condition="'$(MSBuildRuntimeType)'!='Core'">net46</InheritDocTaskTfm>
+		<InheritDocTaskTfm Condition="'$(MSBuildRuntimeType)'=='Core'">netstandard2.0</InheritDocTaskTfm>
+		<InheritDocTaskLib>$(MSBuildThisFileDirectory)..\tools\$(InheritDocTaskTfm)\SauceControl.InheritDoc.dll</InheritDocTaskLib>
+	</PropertyGroup>
+
+	<UsingTask TaskName="InheritDocTask" AssemblyFile="$(InheritDocTaskLib)"/>
+
+</Project>

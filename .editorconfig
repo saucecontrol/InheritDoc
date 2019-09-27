@@ -1,0 +1,9 @@
+root = true
+
+[*]
+indent_style = tab
+indent_size = 4
+
+[*.cs]
+# CA1031: Do not catch general exception types
+dotnet_diagnostic.CA1031.severity = silent

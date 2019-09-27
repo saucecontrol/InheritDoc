@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<VersionPrefix>0.1.0</VersionPrefix>
+		<TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<DevelopmentDependency>true</DevelopmentDependency>
+		<BuildOutputTargetFolder>tools</BuildOutputTargetFolder>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<NoWarn>$(NoWarn);NU5128</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="package\*" Pack="true" PackagePath="package" />
+		<None Include="package\build\*" Pack="true" PackagePath="build;buildCrossTargeting" />
+		<None Include="$(OutputPath)\*\Mono.Cecil.dll" Pack="true" PackagePath="tools" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.9.20" PrivateAssets="all" />
+		<PackageReference Include="Mono.Cecil" Version="0.11.0" PrivateAssets="all" />
+	</ItemGroup>
+
+</Project>

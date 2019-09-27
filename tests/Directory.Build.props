@@ -1,0 +1,25 @@
+<Project>
+
+	<PropertyGroup>
+		<LangVersion>8</LangVersion>
+		<Features>strict</Features>
+		<Nullable>annotations</Nullable>
+		<SignAssembly>true</SignAssembly>
+		<AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\src\SauceControl.snk</AssemblyOriginatorKeyFile>
+
+		<Configuration Condition="'$(Configuration)'==''">Release</Configuration>
+		<BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\out\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+		<BaseOutputPath>$(MSBuildThisFileDirectory)..\out\bin\$(MSBuildProjectName)\</BaseOutputPath>
+		<IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
+		<OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
+		<IntDir>$(IntermediateOutputPath)$(TargetFramework)\</IntDir>
+		<OutDir>$(OutputPath)$(TargetFramework)\</OutDir>
+		<AssemblyInfoFile>$(IntDir)_AssemblyInfo.cs</AssemblyInfoFile>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)'=='Release'">
+		<DebugType>pdbonly</DebugType>
+		<DebugSymbols>true</DebugSymbols>
+	</PropertyGroup>
+
+</Project>
