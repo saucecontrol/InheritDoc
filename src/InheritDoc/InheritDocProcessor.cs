@@ -114,9 +114,17 @@ internal class InheritDocProcessor
 
 				var om = m.Overrides.Select(o => o.Resolve()).FirstOrDefault(o => o.DeclaringType.IsInterface);
 
-				// If no docs for public explicit interface implementation, inject them.
+				// If no docs for public explicit interface implementation, inject them
+				// including the whitespace they would have had if they had been there.
 				if (t.IsPublic && (om?.DeclaringType.IsPublic ?? false) && !findDocsByID(docMembers, memID).Any())
-					docMembers.Add(new XElement(DocElementNames.Member, new XAttribute(DocAttributeNames.Name, memID), new XElement(DocElementNames.InheritDoc)));
+					docMembers.Add(
+						new XText("    "),
+							new XElement(DocElementNames.Member,
+								new XAttribute(DocAttributeNames.Name, memID),
+								new XText("\n            "), new XElement(DocElementNames.InheritDoc),
+							new XText("\n        ")),
+						new XText("\n    ")
+					);
 
 				foreach (var md in findDocsByID(docMembers, memID).Where(me => me.Descendants(DocElementNames.InheritDoc).Any() && !docMap.ContainsKey(memID)))
 				{
@@ -187,7 +195,7 @@ internal class InheritDocProcessor
 		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
 			md.SetAttributeValue(DocAttributeNames._visited, null);
 
-		using var writer = new XmlTextWriter(outPath, new UTF8Encoding(false)) { Formatting = Formatting.Indented, Indentation = 4 };
+		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
 		doc.Save(writer);
 	}
 
@@ -300,13 +308,10 @@ internal class InheritDocProcessor
 			}
 		}
 
-		if (nodes.Count > 2)
-		{
-			if (nodes[0].IsWhiteSpace())
-				nodes.RemoveAt(0);
-			if (nodes[nodes.Count - 1].IsWhiteSpace())
-				nodes.RemoveAt(nodes.Count - 1);
-		}
+		if (nodes.Count > 0 && nodes[nodes.Count - 1].IsWhiteSpace())
+			nodes.RemoveAt(nodes.Count - 1);
+		if (nodes.Count > 0 && nodes[0].IsWhiteSpace())
+			nodes.RemoveAt(0);
 
 		inh.ReplaceWith(nodes);
 	}

@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using System.Diagnostics;
@@ -31,42 +32,47 @@ public class InheritDocTests
 		InheritDocProcessor.InheritDocs(assemblyPath, documentPath, new[] { referencePath }, Array.Empty<string>(), outPath, new DebugLogger());
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
-		processedDocs = XDocument.Load(stmdoc).Root.Element("members");
+		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
 	}
 
 	[TestMethod]
 	public void NamespaceDocPlaceholderReplaced()
 	{
 		var doc = getDocWithID("N:" + nameof(InheritDocTest));
-		Assert.AreEqual("Namespace InheritDocTest", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Namespace InheritDocTest", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ExplicitInterfaceMethodImplementationInserted()
 	{
 		var doc = getDocWithID("M:" + B.M_ID_X);
-		Assert.AreEqual("Method X", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Method X", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ExplicitInterfacePropertyImplementationInserted()
 	{
 		var doc = getDocWithID("P:" + C.P_ID);
-		Assert.AreEqual("Property P", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Property P", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ExplicitInterfaceEventImplementationInserted()
 	{
 		var doc = getDocWithID("E:" + C.E_ID);
-		Assert.AreEqual("Event E", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Event E", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ConstructorInherits()
 	{
 		var doc = getDocWithID("M:" + GIG<string>.M_ID_ctor);
-		Assert.AreEqual("Constructor GG", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Constructor GG", ele?.Value);
 	}
 
 	[TestMethod]
@@ -120,42 +126,48 @@ public class InheritDocTests
 	public void InterfaceInherits()
 	{
 		var doc = getDocWithID("T:" + nameof(IY));
-		Assert.AreEqual("Interface IX", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Interface IX", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ClassInherits()
 	{
 		var doc = getDocWithID("T:" + C.T_ID);
-		Assert.AreEqual("Class B", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Class B", ele?.Value);
 	}
 
 	[TestMethod]
 	public void StructInheritsFromRefDocs()
 	{
 		var doc = getDocWithID("T:" + D.T_ID);
-		Assert.AreEqual("Defines a generalized method that a value type or class implements to create a type-specific method for determining equality of instances.", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Defines a generalized method that a value type or class implements to create a type-specific method for determining equality of instances.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ClassInheritsFromRefDocs()
 	{
 		var doc = getDocWithID("T:" + GXI.T_ID);
-		Assert.AreEqual("Provides support for lazy initialization.", doc?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Provides support for lazy initialization.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void MethodInheritsFromRefDocs()
 	{
 		var doc = getDocWithID("M:" + D.M_ID_EqualsOverride);
-		Assert.AreEqual("Indicates whether this instance and a specified object are equal.", doc?.Element("summary")?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Indicates whether this instance and a specified object are equal.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void MethodInheritsFromCref()
 	{
 		var doc = getDocWithID("M:" + C.M_ID_M);
-		Assert.AreEqual("Gets the runtime type of the current instance.", doc?.Element("summary")?.Value);
+		var ele = doc?.XPathSelectElement("summary");
+		Assert.AreEqual("Gets the runtime type of the current instance.", ele?.Value);
 	}
 
 	[TestMethod]
@@ -180,6 +192,14 @@ public class InheritDocTests
 		var doc = getDocWithID("M:" + C.M_ID_N);
 		var ele = doc?.Element("param");
 		Assert.AreEqual("The message that describes the error.", ele?.Value);
+	}
+
+	[TestMethod]
+	public void WhitespacePreserved()
+	{
+		var doc = getDocWithID("T:" + W.T_ID);
+		var ele = doc?.XPathSelectElement("summary/see[1]");
+		Assert.IsTrue(ele?.NextNode?.IsWhiteSpace() ?? false);
 	}
 
 	private static XElement? getDocWithID(string docID) => processedDocs.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID);

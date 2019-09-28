@@ -1,4 +1,4 @@
-﻿#pragma warning disable CA2231,CA1815,CS0659,IDE0060 // various warnings about Equals/GetHashCode/Operator== overloads and unused parameters
+﻿#pragma warning disable CA2231,CA1815,CA1052,CS0659,IDE0060 // various warnings about Equals/GetHashCode/Operator== overloads and unused parameters
 
 using System;
 using System.Collections.Generic;
@@ -208,4 +208,14 @@ public class GII : IG<string>
 
 	/// <inheritdoc />
 	unsafe public T[] M<T>(T* tp) where T : unmanaged => default;
+}
+
+/// <summary>
+///     Class W
+///     <see cref="B" />
+///     <see cref="C" />
+/// </summary>
+public class W
+{
+	internal const string T_ID = nameof(W);
 }
