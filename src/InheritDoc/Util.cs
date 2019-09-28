@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using System.Collections;
@@ -15,6 +16,11 @@ internal static class Util
 		e.Any() ? e.Concat(e.SelectMany(selector).SelectManyRecursive(selector)) : e;
 
 	public static bool HasAttribute(this XElement e, XName name) => !(e.Attribute(name) is null);
+
+	public static bool IsWhiteSpace(this XNode n) =>
+		n.NodeType == XmlNodeType.Whitespace ||
+		n.NodeType == XmlNodeType.SignificantWhitespace ||
+		(n.NodeType == XmlNodeType.Text && string.IsNullOrWhiteSpace(((XText)n).Value));
 
 	public static IEnumerable<XNode> XPathSelectNodes(this XElement e, string xpath) =>
 		(e.XPathEvaluate(xpath) as IEnumerable)?.Cast<XNode>() ?? Enumerable.Empty<XNode>();

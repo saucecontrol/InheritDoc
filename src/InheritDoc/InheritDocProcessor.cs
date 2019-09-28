@@ -269,6 +269,9 @@ internal class InheritDocProcessor
 
 				if (!pmap.ContainsKey(pname))
 				{
+					if (nodes.Count > i + 1 && nodes[i + 1].IsWhiteSpace())
+						nodes.RemoveAt(i + 1);
+
 					nodes.RemoveAt(i);
 					continue;
 				}
@@ -289,9 +292,20 @@ internal class InheritDocProcessor
 			var pmatch = inh.Parent.XPathSelectElement(mpath);
 			if (ename == DocElementNames.Overloads || (pmatch != null && (inheritSkipIfExists.Contains(ename) || matchAttributes.Any())))
 			{
+				if (nodes.Count > i + 1 && nodes[i + 1].IsWhiteSpace())
+					nodes.RemoveAt(i + 1);
+
 				nodes.RemoveAt(i);
 				continue;
 			}
+		}
+
+		if (nodes.Count > 2)
+		{
+			if (nodes[0].IsWhiteSpace())
+				nodes.RemoveAt(0);
+			if (nodes[nodes.Count - 1].IsWhiteSpace())
+				nodes.RemoveAt(nodes.Count - 1);
 		}
 
 		inh.ReplaceWith(nodes);
@@ -411,7 +425,7 @@ internal class InheritDocProcessor
 	private static XDocument loadDoc(string path)
 	{
 		using var stmdoc = File.Open(path, FileMode.Open);
-		return XDocument.Load(stmdoc, LoadOptions.None);
+		return XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace);
 	}
 
 	private static IEnumerable<XElement> findDocsByID(XElement container, string docID) => container.Elements(DocElementNames.Member).Where(m => (string)m.Attribute(DocAttributeNames.Name) == docID);

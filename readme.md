@@ -20,7 +20,7 @@ How to Use It
 
 2) Add the [SauceControl.InheritDoc](https://www.nuget.org/packages/SauceControl.InheritDoc) NuGet package reference to your project.
 
-    This is a design-time only dependency; it will not be deployed with or referenced by your compiled app/library.
+    This is a development-only dependency; it will not be deployed with or referenced by your compiled app/library.
 
 3) There is no 3.
 
@@ -147,7 +147,7 @@ Once processed, the output XML documentation will look like this (results abbrev
 Advanced Examples
 -----------------
 
-Although the .NET compilers don't allow adding namespace documentation comments, some tools (including SHFB) have a [convention](https://stackoverflow.com/questions/793210/xml-documentation-for-a-namespace) for declaring them in code. InheritDoc follows this convention.
+Although the .NET compilers [don't allow](https://github.com/dotnet/csharplang/issues/315) adding namespace documentation comments, some tools (including SHFB) have a [convention](https://stackoverflow.com/a/52381674/4926931) for declaring them in code. InheritDoc follows this convention.
 
 Note that both the `[CompilerGenerated]` attribute and the class name `NamespaceDoc` are required by InheritDoc.
 
@@ -190,7 +190,7 @@ Outputs:
 </member>
 ```
 
-Notice the `message` `param` element was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with a matching name.
+Notice the `message` `param` element was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with the correct name.
 
 Known Issues
 ------------
@@ -216,4 +216,4 @@ If you attempt to build the test project from this repo using the current (as of
 Troubleshooting
 ---------------
 
-Because this MSBuild Task is supposed to Just Work™, there is very little configuration to do.  If it doesn't work for you, check the detailed output from MSBuild (e.g. `dotnet build -v detailed`) and look for `InheritDoc` in the logs.  You should have some info about why the task failed to run in there.  Issue reports are, of course, welcome with good repro steps.
+Because this MSBuild Task is supposed to Just Work™, there is very little configuration to do, and MSBuild Tasks are a bit of a dark art anyway.  If it doesn't work for you, check the detailed output from MSBuild (e.g. `dotnet build -v detailed`) and look for `InheritDoc` in the logs.  You should have some info about why the task failed to run in there.  Issue reports are, of course, welcome with good repro steps.
