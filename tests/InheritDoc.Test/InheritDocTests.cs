@@ -3,7 +3,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using System.Diagnostics;
@@ -29,7 +28,7 @@ public class InheritDocTests
 	{
 		string outPath = documentPath + ".after";
 
-		InheritDocProcessor.InheritDocs(assemblyPath, documentPath, new[] { referencePath }, Array.Empty<string>(), outPath, new DebugLogger());
+		InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, new[] { referencePath }, Array.Empty<string>(), new DebugLogger());
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
@@ -38,175 +37,156 @@ public class InheritDocTests
 	[TestMethod]
 	public void NamespaceDocPlaceholderReplaced()
 	{
-		var doc = getDocWithID("N:" + nameof(InheritDocTest));
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("N:" + nameof(InheritDocTest), "summary");
 		Assert.AreEqual("Namespace InheritDocTest", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ExplicitInterfaceMethodImplementationInserted()
 	{
-		var doc = getDocWithID("M:" + B.M_ID_X);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("M:" + B.M_ID_X, "summary");
 		Assert.AreEqual("Method X", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ExplicitInterfacePropertyImplementationInserted()
 	{
-		var doc = getDocWithID("P:" + C.P_ID);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("P:" + C.P_ID, "summary");
 		Assert.AreEqual("Property P", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ExplicitInterfaceEventImplementationInserted()
 	{
-		var doc = getDocWithID("E:" + C.E_ID);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("E:" + C.E_ID, "summary");
 		Assert.AreEqual("Event E", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ConstructorInherits()
 	{
-		var doc = getDocWithID("M:" + GIG<string>.M_ID_ctor);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("M:" + GIG<string>.M_ID_ctor, "summary");
 		Assert.AreEqual("Constructor GG", ele?.Value);
 	}
 
 	[TestMethod]
 	public void MethodTypeParamRemapped()
 	{
-		var doc = getDocWithID("M:" + GIG<string>.M_ID);
-		var ele = doc?.XPathSelectElement("typeparam[@name='MT']");
+		var ele = getDocElement("M:" + GIG<string>.M_ID, "typeparam[@name='MT']");
 		Assert.AreEqual("TypeParam U", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ClassTypeParamRemapped()
 	{
-		var doc = getDocWithID("T:" + GIG<string>.T_ID);
-		var ele = doc?.XPathSelectElement("typeparam[@name='TT']");
+		var ele = getDocElement("T:" + GIG<string>.T_ID, "typeparam[@name='TT']");
 		Assert.AreEqual("TypeParam T", ele?.Value);
 	}
 
 	[TestMethod]
 	public void TypeParamRefRemapped()
 	{
-		var doc = getDocWithID("M:" + GIG<string>.M_ID);
-		var ele = doc?.XPathSelectElement("returns/typeparamref[@name='MT']");
+		var ele = getDocElement("M:" + GIG<string>.M_ID, "returns/typeparamref[@name='MT']");
 		Assert.IsNotNull(ele);
 	}
 
 	[TestMethod]
 	public void UnusedParamsTrimmed()
 	{
-		var doc = getDocWithID("M:" + B.M_ID_O);
-		Assert.AreEqual(1, doc?.Elements("param").Count() ?? 0);
+		var ele = getDocElement("M:" + B.M_ID_O, ".");
+		Assert.AreEqual(1, ele?.Elements("param").Count() ?? 0);
 	}
 
 	[TestMethod]
 	public void ParamRemapped()
 	{
-		var doc = getDocWithID("M:" + GGI.M_ID);
-		var ele = doc?.XPathSelectElement("param[@name='x']");
+		var ele = getDocElement("M:" + GGI.M_ID, "param[@name='x']");
 		Assert.AreEqual("Param t", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ParamRefRemapped()
 	{
-		var doc = getDocWithID("M:" + GGI.M_ID);
-		var ele = doc?.XPathSelectElement("returns/paramref[@name='x']");
+		var ele = getDocElement("M:" + GGI.M_ID, "returns/paramref[@name='x']");
 		Assert.IsNotNull(ele);
 	}
 
 	[TestMethod]
 	public void InterfaceInherits()
 	{
-		var doc = getDocWithID("T:" + nameof(IY));
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("T:" + nameof(IY), "summary");
 		Assert.AreEqual("Interface IX", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ClassInherits()
 	{
-		var doc = getDocWithID("T:" + C.T_ID);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("T:" + C.T_ID, "summary");
 		Assert.AreEqual("Class B", ele?.Value);
 	}
 
 	[TestMethod]
 	public void StructInheritsFromRefDocs()
 	{
-		var doc = getDocWithID("T:" + D.T_ID);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("T:" + D.T_ID, "summary");
 		Assert.AreEqual("Defines a generalized method that a value type or class implements to create a type-specific method for determining equality of instances.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void ClassInheritsFromRefDocs()
 	{
-		var doc = getDocWithID("T:" + GXI.T_ID);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("T:" + GXI.T_ID, "summary");
 		Assert.AreEqual("Provides support for lazy initialization.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void MethodInheritsFromRefDocs()
 	{
-		var doc = getDocWithID("M:" + D.M_ID_EqualsOverride);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("M:" + D.M_ID_EqualsOverride, "summary");
 		Assert.AreEqual("Indicates whether this instance and a specified object are equal.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void MethodInheritsFromCref()
 	{
-		var doc = getDocWithID("M:" + C.M_ID_M);
-		var ele = doc?.XPathSelectElement("summary");
+		var ele = getDocElement("M:" + C.M_ID_M, "summary");
 		Assert.AreEqual("Gets the runtime type of the current instance.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void InheritedDocsAreAddedToExisting()
 	{
-		var doc = getDocWithID("M:" + C.M_ID_M);
-		var ele = doc?.Element("typeparam");
+		var ele = getDocElement("M:" + C.M_ID_M, "typeparam");
 		Assert.IsNotNull(ele);
 	}
 
 	[TestMethod]
 	public void NestedInheritDocReplaced()
 	{
-		var doc = getDocWithID("M:" + C.M_ID_M);
-		var ele = doc?.Element("typeparam");
+		var ele = getDocElement("M:" + C.M_ID_M, "typeparam");
 		Assert.AreEqual("The type of objects to enumerate.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void InheritedDocsFilteredByPath()
 	{
-		var doc = getDocWithID("M:" + C.M_ID_N);
-		var ele = doc?.Element("param");
+		var ele = getDocElement("M:" + C.M_ID_N, "param");
 		Assert.AreEqual("The message that describes the error.", ele?.Value);
 	}
 
 	[TestMethod]
 	public void WhitespacePreserved()
 	{
-		var doc = getDocWithID("T:" + W.T_ID);
-		var ele = doc?.XPathSelectElement("summary/see[1]");
+		var ele = getDocElement("T:" + W.T_ID, "summary/see[1]");
 		Assert.IsTrue(ele?.NextNode?.IsWhiteSpace() ?? false);
 	}
 
-	private static XElement? getDocWithID(string docID) => processedDocs.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID);
+	private static XElement? getDocElement(string docID, string xpath) =>
+		processedDocs.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID)?.XPathSelectElement(xpath);
 
 	private class DebugLogger : ILogger
 	{
-		void ILogger.Write(ILogger.Severity severity, string msg)
+		void ILogger.Write(ILogger.Severity severity, string? code, string msg)
 		{
 			if (severity >= ILogger.Severity.Info)
 				Debug.Write(msg);
