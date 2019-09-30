@@ -10,7 +10,7 @@
 		<Title>Automatic Documentation Inheritance Processing</Title>
 		<Description>Automatically replace &lt;inheritdoc /&gt; tags with inherited documentation at build time</Description>
 		<PackageIcon>package/icon.png</PackageIcon>
-		<PackageTags>inheritdoc, inherit, XML, documentation, comments, MSBuild</PackageTags>
+		<PackageTags>Inherit, XML, Documentation, Comments, MSBuild</PackageTags>
 		<PackageReleaseNotes>See $(RepositoryUrl)/releases for release-specific notes.</PackageReleaseNotes>
 
 		<RootNamespace>$(Owners).$(MSBuildProjectName)</RootNamespace>
