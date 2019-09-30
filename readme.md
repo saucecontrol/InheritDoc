@@ -4,13 +4,6 @@ InheritDoc
 
 This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) takes a different approach from other documentation post-processing tools.  By integrating with MSBuild, it has access to the exact arguments passed to the compiler, including assembly references and the output assembly and XML documentation file paths.  As it processes `<inheritdoc />` elements, it is able to more accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This more accurate resolution of references means it can be more clever about mapping documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base type’s definition and update the documentation accordingly.
 
-How it Works
-------------
-
-The InheritDoc `Task` inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Works™.
-
-This enhances the new support for `<inheritdoc />` in Roslyn (available starting in the [VS 16.4 preview](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes-preview#net-productivity-164P1) builds), making it available to all downstream consumers of your documentation.  When using tools such as [DocFX](https://dotnet.github.io/docfx/spec/triple_slash_comments_spec.html#inheritdoc), you will no longer be [subject](https://github.com/dotnet/docfx/issues/3699) to [limitations](https://github.com/dotnet/docfx/issues/1306) around `<inheritdoc />` tag usage because the documentation will already have those tags replaced with the upstream docs.
-
 How to Use It
 -------------
 
@@ -26,13 +19,12 @@ How to Use It
 
     Once the package reference is added to your project, the XML docs will be processed automatically with each build.
 
-Note: InheritDoc can be enabled or disabled by setting the `InheritDocEnabled` MSBuild property in your project.  This may be useful if you wish to skip the overhead of running InheritDoc on debug builds, for example.
+How it Works
+------------
 
-```XML
-<PropertyGroup Condition="'$(Configuration)'=='Debug'">
-    <InheritDocEnabled>false</InheritDocEnabled>
-</PropertyGroup>
-```
+The InheritDoc task inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Works™.
+
+This enhances the new support for `<inheritdoc />` in Roslyn (available starting in the [VS 16.4 preview](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes-preview#net-productivity-164P1) builds), making it available to all downstream consumers of your documentation.  When using tools such as [DocFX](https://dotnet.github.io/docfx/spec/triple_slash_comments_spec.html#inheritdoc), you will no longer be [subject](https://github.com/dotnet/docfx/issues/3699) to [limitations](https://github.com/dotnet/docfx/issues/1306) around `<inheritdoc />` tag usage because the documentation will already have those tags replaced with the upstream docs.
 
 Some Examples
 -------------
@@ -65,8 +57,11 @@ public class A : IY
     /// <summary>Method M</summary>
     /// <typeparam name="T">TypeParam T</typeparam>
     /// <param name="t">Param t</param>
-    /// <returns>Return value <paramref name="t" /> of type <typeparamref name="T" /></returns>
-    public virtual void M<T>(T t) { }
+    /// <returns>
+    /// Returns value <paramref name="t" />
+    /// of type <typeparamref name="T" />
+    /// </returns>
+    public virtual T M<T>(T t) { }
 
     /// <summary>Overloaded Method O</summary>
     /// <param name="s">Param s</param>
@@ -85,7 +80,7 @@ public class B : A
     public override void Y() { }
 
     /// <inheritdoc />
-    public override void M<TValue>(TValue value) { }
+    public override TValue M<TValue>(TValue value) { }
 }
 ```
 
@@ -114,7 +109,10 @@ Once processed, the output XML documentation will look like this (results abbrev
     <summary>Method M</summary>
     <typeparam name="T">TypeParam T</typeparam>
     <param name="t">Param t</param>
-    <returns>Return value <paramref name="t" /> of type <typeparamref name="T" /></returns>
+    <returns>
+    Return value <paramref name="t" />
+    of type <typeparamref name="T" />
+    </returns>
 </member>
 <member name="M:A.O(System.String[],System.String,System.String)">
     <summary>Overloaded Method O</summary>
@@ -137,7 +135,10 @@ Once processed, the output XML documentation will look like this (results abbrev
     <summary>Method M</summary> <!-- inherited from A -->
     <typeparam name="TValue">TypeParam T</typeparam> <!-- typeparam updated to match override's name -->
     <param name="value">Param t</param> <!-- param updated to match override's name -->
-    <returns>Return value <paramref name="value" /> of type <typeparamref name="TValue" /></returns> <!-- paramref and typeparamref updated as well -->
+    <returns>
+    Returns value <paramref name="value" /> <!-- paramref and typeparamref updated as well -->
+    of type <typeparamref name="TValue" />
+    </returns>
 </member>
 <member name="M:A.IX#X"> <!-- explicit interface implementation doc added automatically -->
     <summary>Method X</summary>
@@ -190,7 +191,58 @@ Outputs:
 </member>
 ```
 
-Notice the `message` `param` element was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with the correct name.
+Notice the `param` element for `message` was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with the correct name.
+
+Configuration
+-------------
+
+#### Enabling/Disabling InheritDoc
+
+InheritDoc is enabled by default for all normal builds.  It can be disabled by setting the `InheritDocEnabled` MSBuild property in your project.  This may be used if you wish to skip the overhead of running InheritDoc on debug builds, for example.
+
+```XML
+<PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <InheritDocEnabled>false</InheritDocEnabled>
+</PropertyGroup>
+```
+
+The same can be achieved by conditionally incuding the NuGet package
+
+```XML
+<ItemGroup Condition="'$(Configuration)'!='Debug'">
+    <PackageReference Include="SauceControl.InheritDoc" Version="0.2.0" PrivateAssets="all" />
+</ItemGroup>
+```
+
+#### Adding Candidate Docs for Inheritance
+
+InheritDoc will automatically discover XML documentation files alongside assemblies referenced by your project.  If necessary, additional XML documentation files can be manually included with `InheritDocReference`.  For example:
+
+```XML
+<ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
+    <InheritDocReference Include="\path\to\netstandard2.1.xml" />
+    <InheritDocReference Include="\path\to\moredocs.xml" />
+</ItemGroup>
+```
+
+#### Disabling InheritDoc Build Warnings
+
+Warnings can be selectively disabled with the MSBuild standard `NoWarn` property.  For example:
+
+```XML
+<PropertyGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
+    <NoWarn>$(NoWarn);IDT001</NoWarn>
+</PropertyGroup>
+```
+
+#### Possible Warnings
+
+| Code | Description |
+|------|-------------|
+|IDT001| Indicates a referenced XML documentation file could not be loaded or parsed or that the file did not contain documentation in the standard schema. |
+|IDT002| Typically indicates incomplete XML docs for referenced assemblies. I.E. an inheritance candidate was identified but had no documentaion to inherit. |
+|IDT003| May indicate you used `<inheritdoc />` on a type/member with no identifiable base. You may correct this warning by using the `cref` attribute to identify the base explicitly. |
+|IDT004| May indicate an incorrect XPATH value in a `path` attribute. |
 
 Known Issues
 ------------
@@ -199,15 +251,7 @@ Known Issues
 
 When targeting `netstandard2.0`, if you attempt to inherit docs from any types/members in the framework you will receive errors from InheritDoc related to malformed XML in `netstandard.xml` and then subsequent errors for each member whose documentation could not be found.  All shipping versions of `NETStandard.Library` v2.0 have bad XML documentation.  This has been corrected in `netstandard2.1` builds, but since InheritDoc resolves documentation based on assembly references at compile time, it will find the bad docs for `netstandard2.0` targets.
 
-If this displeases you, you may register your discontent by commenting on the [associated issue](https://github.com/dotnet/standard/issues/1527) in the NETStandard repo.  In the meantime, you can either replace the `netstandard.xml` file in your NuGet package cache with a corrected file, or you can configure InheritDoc to load additional documentation file(s) that include the types referenced.  For example:
-
-```XML
-<ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-    <InheritDocReference Include="\path\to\netstandard2.1.xml" />
-</ItemGroup>
-```
-
-You may also use `InheritDocReference` to add additional documentation files for types referenced in `cref` attributes that are not part of the project's reference assemblies or that could not be resolved automatically.
+If this displeases you, you may register your discontent by commenting on the [associated issue](https://github.com/dotnet/standard/issues/1527) in the NETStandard repo.  In the meantime, you can either replace the `netstandard.xml` file in your NuGet package cache with a corrected file, or you can configure InheritDoc to load additional documentation file(s) that include the types referenced.
 
 ### Roslyn Analyzer Bug
 
