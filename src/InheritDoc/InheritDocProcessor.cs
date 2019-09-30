@@ -55,7 +55,7 @@ internal class InheritDocProcessor
 	private static readonly string refFolderToken = Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar;
 	private static readonly string libFolderToken = Path.DirectorySeparatorChar + "lib" + Path.DirectorySeparatorChar;
 
-	public static void InheritDocs(string asmPath, string docPath, string[] refPaths, string[] addPaths, string outPath, ILogger logger)
+	public static void InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ILogger logger)
 	{
 		var doc = loadDoc(docPath);
 		using var resolver = new CecilExtensions.RefAssemblyResolver(refPaths);
@@ -69,8 +69,38 @@ internal class InheritDocProcessor
 			.ToList()
 		;
 
-		var docMap = new Dictionary<string, DocMatch>();
 		var docMembers = doc.Root.Element(DocElementNames.Members);
+		var docMap = generateDocMap(types, docMembers, logger);
+
+		var expCref = docMembers.Elements(DocElementNames.Member).SelectMany(m => m.Descendants(DocElementNames.InheritDoc).Select(d => (string)d.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)));
+		var inhCref = docMap.Values.Select(v => v.Cref);
+
+		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
+		var refCref = expCref.Concat(inhCref).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
+
+		int toReplace = docMembers.Elements(DocElementNames.Member).Count(me => me.Descendants(DocElementNames.InheritDoc).Any(i => i.HasAttribute(DocAttributeNames.Cref) || docMap.ContainsKey((string)me.Attribute(DocAttributeNames.Name))));
+		logger.Write(ILogger.Severity.Diag, null, "Member docs to replace: " + toReplace.ToString());
+		logger.Write(ILogger.Severity.Diag, null, "Member docs unresolved: " + (docMembers.Elements(DocElementNames.Member).Count(me => me.Descendants(DocElementNames.InheritDoc).Any()) - toReplace).ToString());
+
+		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
+		logger.Write(ILogger.Severity.Diag, null, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
+		foreach (var cref in refCref.Where(c => !findDocsByID(refDocs.Root, c).Any()))
+			logger.Write(ILogger.Severity.Warn, ErrorCodes.NoDocs, "External ref doc not found: " + cref);
+
+		var mem = default(XElement);
+		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) != null)
+			replaceInheritDoc(mem, docMap, docMembers, refDocs, logger);
+
+		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
+			md.SetAttributeValue(DocAttributeNames._visited, null);
+
+		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
+		doc.Save(writer);
+	}
+
+	private static IDictionary<string, DocMatch> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ILogger logger)
+	{
+		var docMap = new Dictionary<string, DocMatch>();
 
 		foreach (var t in types)
 		{
@@ -89,7 +119,7 @@ internal class InheritDocProcessor
 
 			foreach (var md in memDocs.Where(m => m.Descendants(DocElementNames.InheritDoc).Any()))
 			{
-				var bt = t.GetDocBaseCandidates().FirstOrDefault();
+				var bt = t.GetBaseCandidates().FirstOrDefault();
 				if (bt != null)
 				{
 					var rbt = bt.Resolve();
@@ -128,9 +158,9 @@ internal class InheritDocProcessor
 
 				foreach (var md in findDocsByID(docMembers, memID).Where(me => me.Descendants(DocElementNames.InheritDoc).Any() && !docMap.ContainsKey(memID)))
 				{
-					logger.Write(ILogger.Severity.Diag, "Processing DocID: " + memID);
+					logger.Write(ILogger.Severity.Diag, null, "Processing DocID: " + memID);
 
-					om ??= m.GetDocBaseCandidates().FirstOrDefault();
+					om ??= m.GetBaseCandidates().FirstOrDefault();
 					if (om != null)
 					{
 						var dm = new DocMatch(om.GetDocID());
@@ -167,39 +197,16 @@ internal class InheritDocProcessor
 					}
 					else
 					{
-						logger.Write(ILogger.Severity.Warn, "No inherit candidate for: " + memID);
+						logger.Write(ILogger.Severity.Info, null, "No inherit candidate for: " + memID);
 					}
 				}
 			}
 		}
 
-		var expCref = docMembers.Elements(DocElementNames.Member).SelectMany(m => m.Descendants(DocElementNames.InheritDoc).Select(d => (string)d.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)));
-		var inhCref = docMap.Values.Select(v => v.Cref);
-
-		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
-		var refCref = expCref.Concat(inhCref).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
-
-		int toReplace = docMembers.Elements(DocElementNames.Member).Count(me => me.Descendants(DocElementNames.InheritDoc).Any(i => i.HasAttribute(DocAttributeNames.Cref) || docMap.ContainsKey((string)me.Attribute(DocAttributeNames.Name))));
-		logger.Write(ILogger.Severity.Diag, "Member docs to replace: " + toReplace.ToString());
-		logger.Write(ILogger.Severity.Diag, "Member docs unresolved: " + (docMembers.Elements(DocElementNames.Member).Count(me => me.Descendants(DocElementNames.InheritDoc).Any()) - toReplace).ToString());
-
-		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
-		logger.Write(ILogger.Severity.Diag, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
-		foreach (var cref in refCref.Where(c => !findDocsByID(refDocs.Root, c).Any()))
-			logger.Write(ILogger.Severity.Warn, "External ref doc not found: " + cref);
-
-		var mem = default(XElement);
-		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) != null)
-			replaceInheritDoc(mem, docMap, docMembers, refDocs, logger);
-
-		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
-			md.SetAttributeValue(DocAttributeNames._visited, null);
-
-		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
-		doc.Save(writer);
+		return docMap;
 	}
 
-	private static void replaceInheritDoc(XElement mem, Dictionary<string, DocMatch> docMap, XElement members, XDocument refDocs, ILogger logger)
+	private static void replaceInheritDoc(XElement mem, IDictionary<string, DocMatch> docMap, XElement members, XDocument refDocs, ILogger logger)
 	{
 		if (mem.HasAttribute(DocAttributeNames._visited))
 			return;
@@ -213,7 +220,7 @@ internal class InheritDocProcessor
 			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dm?.Cref;
 			if (string.IsNullOrEmpty(cref))
 			{
-				logger.Write(ILogger.Severity.Warn, "Cref not present and no base could be found for: " + memID);
+				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoBase, "Cref not present and no base could be found for: " + memID);
 				continue;
 			}
 
@@ -239,7 +246,7 @@ internal class InheritDocProcessor
 
 	private static void inheritDocs(XElement inh, XElement doc, DocMatch dm, ILogger logger)
 	{
-		logger.Write(ILogger.Severity.Diag, "Inheriting docs from: " + dm.Cref);
+		logger.Write(ILogger.Severity.Diag, null, "Inheriting docs from: " + dm.Cref);
 
 		string xpath = (string)inh.Attribute(DocAttributeNames.Path) ?? "node()";
 		var docBase = new XElement(doc);
@@ -257,12 +264,15 @@ internal class InheritDocProcessor
 			docBase = docBase.XPathSelectElement(startPath);
 			if (docBase is null)
 			{
-				logger.Write(ILogger.Severity.Warn, "No matching doc found for: " + startPath);
+				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoNode, "No matching elements found for \"" + dm.Cref + "\" path=\"" + startPath + "\"");
 				return;
 			}
 		}
 
 		var nodes = docBase.XPathSelectNodes(xpath).ToList();
+		if (nodes.Count == 0)
+			logger.Write(ILogger.Severity.Warn, ErrorCodes.NoNode, "No matching nodes found for \"" + dm.Cref + "\" path=\"" + xpath + "\"");
+
 		for (int i = nodes.Count - 1; i >= 0; --i)
 		{
 			if (!(nodes[i] is XElement elem))
@@ -318,7 +328,7 @@ internal class InheritDocProcessor
 
 	private static bool isInheritDocCandidate(XElement m) => !string.IsNullOrEmpty((string)m.Attribute(DocAttributeNames.Name)) && !m.HasAttribute(DocAttributeNames._visited) && m.Descendants(DocElementNames.InheritDoc).Any();
 
-	static XDocument getRefDocs(string[] refAssemblies, string[] refDocs, IReadOnlyCollection<string> refCref, ILogger logger)
+	static XDocument getRefDocs(IReadOnlyCollection<string> refAssemblies, IReadOnlyCollection<string> refDocs, IReadOnlyCollection<string> refCref, ILogger logger)
 	{
 		var doc = new XDocument(new XElement(DocElementNames.Doc));
 		if (refCref.Count == 0)
@@ -332,7 +342,7 @@ internal class InheritDocProcessor
 		foreach (string docPath in docPaths)
 		{
 			string path = docPath;
-			logger.Write(ILogger.Severity.Diag, "Trying ref doc path: " + path);
+			logger.Write(ILogger.Severity.Diag, null, "Trying ref doc path: " + path);
 
 			if (!File.Exists(path))
 			{
@@ -344,7 +354,7 @@ internal class InheritDocProcessor
 				else
 					continue;
 
-				logger.Write(ILogger.Severity.Info, "Using alt ref doc path: " + docPath + " -> " + path);
+				logger.Write(ILogger.Severity.Info, null, "Using alt ref doc path: " + docPath + " -> " + path);
 			}
 
 			using var xrd = getDocReader(path, logger);
@@ -369,7 +379,7 @@ internal class InheritDocProcessor
 			}
 			catch (XmlException ex)
 			{
-				logger.Write(ILogger.Severity.Warn, "XML parse error in doc file: " + path + " -- " + ex.Message);
+				logger.Write(ILogger.Severity.Warn, ErrorCodes.BadXml, "XML parse error in doc file: " + path + " -- " + ex.Message);
 			}
 		}
 
@@ -388,7 +398,7 @@ internal class InheritDocProcessor
 
 			if (!xrd.ReadToFollowing(DocElementNames.Doc.LocalName))
 			{
-				logger.Write(ILogger.Severity.Warn, "Not a doc file: " + docPath);
+				logger.Write(ILogger.Severity.Warn, ErrorCodes.BadXml, "Not a doc file: " + docPath);
 				xrd.Dispose();
 
 				return null;
@@ -399,7 +409,7 @@ internal class InheritDocProcessor
 			if (!string.IsNullOrEmpty(redir))
 			{
 				string newDocPath = Util.ReplacePathSpecialFolder(redir);
-				logger.Write(ILogger.Severity.Info, "Doc file redirected: " + docPath + " -> " + newDocPath);
+				logger.Write(ILogger.Severity.Info, null, "Doc file redirected: " + docPath + " -> " + newDocPath);
 				xrd.Dispose();
 
 				return File.Exists(newDocPath) ? getDocReader(newDocPath, logger) : null;
@@ -409,7 +419,7 @@ internal class InheritDocProcessor
 		}
 		catch (Exception ex)
 		{
-			logger.Write(ILogger.Severity.Warn, "Error loading doc file, skipping: " + ex.ToString());
+			logger.Write(ILogger.Severity.Warn, ErrorCodes.BadXml, "Error loading doc file, skipping: " + ex.ToString());
 			xrd?.Dispose();
 			rdr?.Dispose();
 
@@ -449,7 +459,15 @@ internal class InheritDocProcessor
 
 internal interface ILogger
 {
-	public enum Severity { Diag, Info, Warn, Error }
+	public enum Severity { Diag, Info, Message, Warn, Error }
 
-	void Write(Severity severity, string msg);
+	void Write(Severity severity, string? code, string msg);
+}
+
+internal class ErrorCodes
+{
+	public const string BadXml = "IDT001";
+	public const string NoDocs = "IDT002";
+	public const string NoBase = "IDT003";
+	public const string NoNode = "IDT004";
 }

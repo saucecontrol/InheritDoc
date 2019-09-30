@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Collections.Generic;
 
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
@@ -13,19 +15,21 @@ public class InheritDocTask : Task
 
 	public string? RefAssemblyPaths { get; set; }
 	public string? AdditionalDocPaths { get; set; }
+	public string? NoWarn { get; set; }
 
 	public override bool Execute()
 	{
 		try
 		{
-			var logger = new TaskLogger(Log) as ILogger;
-			logger.Write(ILogger.Severity.Info, typeof(InheritDocTask).Assembly.GetName().FullName);
-			logger.Write(ILogger.Severity.Info, nameof(AssemblyPath) + ": " + AssemblyPath);
-			logger.Write(ILogger.Severity.Info, nameof(DocumentationPath) + ": " + DocumentationPath);
-			logger.Write(ILogger.Severity.Info, nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths);
-			logger.Write(ILogger.Severity.Info, nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths);
+			var logger = new TaskLogger(Log, NoWarn?.Split(';') ?? Array.Empty<string>()) as ILogger;
+			logger.Write(ILogger.Severity.Info, null, typeof(InheritDocTask).Assembly.GetName().FullName);
+			logger.Write(ILogger.Severity.Info, null, nameof(AssemblyPath) + ": " + AssemblyPath);
+			logger.Write(ILogger.Severity.Info, null, nameof(DocumentationPath) + ": " + DocumentationPath);
+			logger.Write(ILogger.Severity.Info, null, nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths);
+			logger.Write(ILogger.Severity.Info, null, nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths);
 
-			InheritDocProcessor.InheritDocs(AssemblyPath, DocumentationPath, RefAssemblyPaths?.Split(';') ?? Array.Empty<string>(), AdditionalDocPaths?.Split(';') ?? Array.Empty<string>(), DocumentationPath, logger);
+			InheritDocProcessor.InheritDocs(AssemblyPath, DocumentationPath, DocumentationPath, RefAssemblyPaths?.Split(';') ?? Array.Empty<string>(), AdditionalDocPaths?.Split(';') ?? Array.Empty<string>(), logger);
+			logger.Write(ILogger.Severity.Message, null, nameof(InheritDocTask) + " processed " + Path.GetFullPath(DocumentationPath));
 
 			return true;
 		}
@@ -39,17 +43,31 @@ public class InheritDocTask : Task
 	private class TaskLogger : ILogger
 	{
 		private readonly TaskLoggingHelper logger;
+		private readonly ICollection<string> noWarning;
 
-		public TaskLogger(TaskLoggingHelper helper) => logger = helper;
-
-		void ILogger.Write(ILogger.Severity severity, string msg)
+		public TaskLogger(TaskLoggingHelper helper, ICollection<string> noWarn)
 		{
+			logger = helper;
+			noWarning = noWarn;
+		}
+
+		void ILogger.Write(ILogger.Severity severity, string? code, string msg)
+		{
+			var msgImportance = severity switch {
+				ILogger.Severity.Message => MessageImportance.High,
+				ILogger.Severity.Diag => MessageImportance.Low,
+				_ => MessageImportance.Normal
+			};
+
+			if (!string.IsNullOrEmpty(code))
+				msg = code + ": " + msg;
+
 			if (severity == ILogger.Severity.Error)
 				logger.LogError(msg);
-			else if (severity == ILogger.Severity.Warn)
+			else if (severity == ILogger.Severity.Warn && (code is null || !noWarning.Contains(code)))
 				logger.LogWarning(msg);
 			else
-				logger.LogMessage(severity == ILogger.Severity.Info ? MessageImportance.Normal : MessageImportance.Low, msg);
+				logger.LogMessage(msgImportance, msg);
 		}
 	}
 }

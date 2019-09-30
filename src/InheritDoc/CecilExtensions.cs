@@ -62,7 +62,7 @@ internal static class CecilExtensions
 
 	public static bool IsPropertyMethod(this MethodDefinition m) => m.IsGetter || m.IsSetter;
 
-	public static IEnumerable<TypeReference> GetDocBaseCandidates(this TypeDefinition t)
+	public static IEnumerable<TypeReference> GetBaseCandidates(this TypeDefinition t)
 	{
 		while (t.BaseType != null && !ignoredBaseTypes.Contains(t.BaseType.FullName))
 		{
@@ -77,7 +77,7 @@ internal static class CecilExtensions
 			yield return t.BaseType;
 	}
 
-	public static IEnumerable<MethodDefinition> GetDocBaseCandidates(this MethodDefinition m)
+	public static IEnumerable<MethodDefinition> GetBaseCandidates(this MethodDefinition m)
 	{
 		if ((m.IsVirtual && m.IsReuseSlot) || m.IsConstructor)
 			yield return getBaseMethodFromType(m, m.DeclaringType.BaseType)!;
@@ -166,7 +166,7 @@ internal static class CecilExtensions
 		if (mp.IsArray && op.IsArray)
 			return areParamTypesEquivalent(((ArrayType)mp).ElementType, ((ArrayType)op).ElementType, genMap);
 
-		return mp.Resolve() == op.Resolve() || (mp.IsGenericParameter && genMap[mp].Resolve() == op.Resolve());
+		return mp.MetadataToken == op.MetadataToken || mp.Resolve() == op.Resolve() || (mp.IsGenericParameter && genMap.ContainsKey(mp) && areParamTypesEquivalent(genMap[mp], op, genMap));
 	}
 
 	private static string? encodeMethodParams(ICollection<ParameterDefinition> mp) => mp.Count > 0 ? "(" + string.Join(",", mp.Select(p => encodeTypeName(p.ParameterType))) + ")" : null;
