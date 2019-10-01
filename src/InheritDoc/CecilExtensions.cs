@@ -140,31 +140,14 @@ internal static class CecilExtensions
 
 	private static bool areParamTypesEquivalent(TypeReference mp, TypeReference op, IDictionary<TypeReference, TypeReference> genMap)
 	{
-		if (mp.IsRequiredModifier && op.IsRequiredModifier)
-		{
-			var mpe = (RequiredModifierType)mp;
-			var ope = (RequiredModifierType)op;
-			return mpe.ModifierType.Resolve() == ope.ModifierType.Resolve() && areParamTypesEquivalent(mpe.ElementType, ope.ElementType, genMap);
-		}
+		if (((mp.IsRequiredModifier && op.IsRequiredModifier) || (mp.IsOptionalModifier && op.IsOptionalModifier)) && mp is IModifierType mpm && op is IModifierType opm)
+			return areParamTypesEquivalent(mpm.ModifierType, opm.ModifierType, genMap) && areParamTypesEquivalent(mpm.ElementType, opm.ElementType, genMap);
 
-		if (mp.IsOptionalModifier && op.IsOptionalModifier)
-		{
-			var mpe = (OptionalModifierType)mp;
-			var ope = (OptionalModifierType)op;
-			return mpe.ModifierType.Resolve() == ope.ModifierType.Resolve() && areParamTypesEquivalent(mpe.ElementType, ope.ElementType, genMap);
-		}
+		if (mp.IsArray && op.IsArray && mp is ArrayType mpa && op is ArrayType opa)
+			return mpa.Rank == opa.Rank && areParamTypesEquivalent(mpa.ElementType, opa.ElementType, genMap);
 
-		if (mp.IsPointer && op.IsPointer)
-			return areParamTypesEquivalent(((PointerType)mp).ElementType, ((PointerType)op).ElementType, genMap);
-
-		if (mp.IsByReference && op.IsByReference)
-			return areParamTypesEquivalent(((ByReferenceType)mp).ElementType, ((ByReferenceType)op).ElementType, genMap);
-
-		if (mp.IsPinned && op.IsPinned)
-			return areParamTypesEquivalent(((PinnedType)mp).ElementType, ((PinnedType)op).ElementType, genMap);
-
-		if (mp.IsArray && op.IsArray)
-			return areParamTypesEquivalent(((ArrayType)mp).ElementType, ((ArrayType)op).ElementType, genMap);
+		if (mp is TypeSpecification mpe && op is TypeSpecification ope)
+			return areParamTypesEquivalent(mpe.ElementType, ope.ElementType, genMap);
 
 		return mp.MetadataToken == op.MetadataToken || mp.Resolve() == op.Resolve() || (mp.IsGenericParameter && genMap.ContainsKey(mp) && areParamTypesEquivalent(genMap[mp], op, genMap));
 	}
@@ -194,19 +177,12 @@ internal static class CecilExtensions
 				tr = ((PinnedType)tr).ElementType;
 				suffix = "^" + suffix;
 			}
-			if (tr.IsRequiredModifier)
+			if (tr.IsRequiredModifier || tr.IsOptionalModifier)
 			{
-				var mr = (RequiredModifierType)tr;
-				tr = mr.ElementType;
-				if (!ignoredModifiers.Contains(mr.ModifierType.FullName))
-					suffix = "|" + mr.ModifierType.FullName + suffix;
-			}
-			if (tr.IsOptionalModifier)
-			{
-				var mo = (OptionalModifierType)tr;
-				tr = mo.ElementType;
-				if (!ignoredModifiers.Contains(mo.ModifierType.FullName))
-					suffix = "!" + mo.ModifierType.FullName + suffix;
+				var mt = (IModifierType)tr;
+				tr = mt.ElementType;
+				if (!ignoredModifiers.Contains(mt.ModifierType.FullName))
+					suffix = (tr.IsRequiredModifier ? "|" : "!") + mt.ModifierType.FullName + suffix;
 			}
 			if (tr.IsArray)
 			{
@@ -248,10 +224,16 @@ internal static class CecilExtensions
 
 	internal class RefAssemblyResolver : DefaultAssemblyResolver
 	{
-		public RefAssemblyResolver(string[] refAssemblies)
+		public static RefAssemblyResolver Create(string[] refAssemblies)
 		{
+			var resolver = new RefAssemblyResolver();
+
 			foreach (var assemblyFile in refAssemblies)
-				RegisterAssembly(AssemblyDefinition.ReadAssembly(assemblyFile));
+				resolver.RegisterAssembly(AssemblyDefinition.ReadAssembly(assemblyFile, new ReaderParameters { AssemblyResolver = resolver }));
+
+			return resolver;
 		}
+
+		private RefAssemblyResolver() { }
 	}
 }

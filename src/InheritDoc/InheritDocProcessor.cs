@@ -58,7 +58,7 @@ internal class InheritDocProcessor
 	public static void InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ILogger logger)
 	{
 		var doc = loadDoc(docPath);
-		using var resolver = new CecilExtensions.RefAssemblyResolver(refPaths);
+		using var resolver = CecilExtensions.RefAssemblyResolver.Create(refPaths);
 		using var asm = AssemblyDefinition.ReadAssembly(asmPath, new ReaderParameters { AssemblyResolver = resolver });
 
 		var types =
