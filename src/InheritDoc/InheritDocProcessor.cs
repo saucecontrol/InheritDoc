@@ -55,9 +55,15 @@ internal class InheritDocProcessor
 	private static readonly string refFolderToken = Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar;
 	private static readonly string libFolderToken = Path.DirectorySeparatorChar + "lib" + Path.DirectorySeparatorChar;
 
-	public static void InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ILogger logger)
+	public static Tuple<int, int> InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ILogger logger)
 	{
 		var doc = loadDoc(docPath);
+		var docMembers = doc.Root.Element(DocElementNames.Members);
+		int beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
+
+		if (beforeCount == 0)
+			return Tuple.Create(0, 0);
+
 		using var resolver = CecilExtensions.RefAssemblyResolver.Create(refPaths);
 		using var asm = AssemblyDefinition.ReadAssembly(asmPath, new ReaderParameters { AssemblyResolver = resolver });
 
@@ -69,23 +75,12 @@ internal class InheritDocProcessor
 			.ToList()
 		;
 
-		var docMembers = doc.Root.Element(DocElementNames.Members);
 		var docMap = generateDocMap(types, docMembers, logger);
-
-		var expCref = docMembers.Elements(DocElementNames.Member).SelectMany(m => m.Descendants(DocElementNames.InheritDoc).Select(d => (string)d.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)));
-		var inhCref = docMap.Values.Select(v => v.Cref);
-
 		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
-		var refCref = expCref.Concat(inhCref).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
 
-		int toReplace = docMembers.Elements(DocElementNames.Member).Count(me => me.Descendants(DocElementNames.InheritDoc).Any(i => i.HasAttribute(DocAttributeNames.Cref) || docMap.ContainsKey((string)me.Attribute(DocAttributeNames.Name))));
-		logger.Write(ILogger.Severity.Diag, null, "Member docs to replace: " + toReplace.ToString());
-		logger.Write(ILogger.Severity.Diag, null, "Member docs unresolved: " + (docMembers.Elements(DocElementNames.Member).Count(me => me.Descendants(DocElementNames.InheritDoc).Any()) - toReplace).ToString());
-
+		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
 		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
 		logger.Write(ILogger.Severity.Diag, null, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
-		foreach (var cref in refCref.Where(c => !findDocsByID(refDocs.Root, c).Any()))
-			logger.Write(ILogger.Severity.Warn, ErrorCodes.NoDocs, "External ref doc not found: " + cref);
 
 		var mem = default(XElement);
 		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) != null)
@@ -94,13 +89,17 @@ internal class InheritDocProcessor
 		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
 			md.SetAttributeValue(DocAttributeNames._visited, null);
 
+		int afterCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
+
 		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
 		doc.Save(writer);
+
+		return Tuple.Create(beforeCount - afterCount, beforeCount);
 	}
 
-	private static IDictionary<string, DocMatch> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ILogger logger)
+	private static IDictionary<string, IEnumerable<DocMatch>> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ILogger logger)
 	{
-		var docMap = new Dictionary<string, DocMatch>();
+		var docMap = new Dictionary<string, IEnumerable<DocMatch>>();
 
 		foreach (var t in types)
 		{
@@ -117,30 +116,35 @@ internal class InheritDocProcessor
 				continue;
 			}
 
-			foreach (var md in memDocs.Where(m => m.Descendants(DocElementNames.InheritDoc).Any()))
+			if (memDocs.Descendants(DocElementNames.InheritDoc).Any())
 			{
-				var bt = t.GetBaseCandidates().FirstOrDefault();
-				if (bt != null)
+				logger.Write(ILogger.Severity.Diag, null, "Processing DocID: " + typeID);
+
+				var crefs = memDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
+				var dml = new List<DocMatch>();
+				docMap.Add(typeID, dml);
+
+				foreach (var bt in t.GetBaseCandidates())
 				{
 					var rbt = bt.Resolve();
-					var dm = new DocMatch(rbt.GetDocID());
-					docMap.Add(typeID, dm);
+					string cref = rbt.GetDocID();
 
-					if (t.HasGenericParameters && bt.IsGenericInstance)
-					{
-						var ga = ((GenericInstanceType)bt).GenericArguments;
-						var tpm = new Dictionary<string, string>();
-						foreach (var tp in t.GenericParameters.Where(p => ga.Contains(p)))
-							tpm.Add(rbt.GenericParameters[ga.IndexOf(tp)].Name, tp.Name);
+					if (dml.Count == 0 || crefs.Contains(cref))
+						dml.Add(new DocMatch(cref, t, bt));
 
-						dm.TypeParamMap = tpm;
-					}
+					if (crefs.Count == 0)
+						break;
 				}
+
+				foreach (var cref in crefs.Where(c => !dml.Any(dm => dm.Cref == c)))
+					dml.Add(new DocMatch(cref, t));
 			}
 
 			foreach (var m in t.Methods.Where(m => !m.IsCompilerGenerated() || m.IsEventMethod() || m.IsPropertyMethod()))
 			{
 				string memID = m.GetDocID();
+				if (docMap.ContainsKey(memID))
+					continue;
 
 				var om = m.Overrides.Select(o => o.Resolve()).FirstOrDefault(o => o.DeclaringType.IsInterface);
 
@@ -156,49 +160,33 @@ internal class InheritDocProcessor
 						new XText("\n    ")
 					);
 
-				foreach (var md in findDocsByID(docMembers, memID).Where(me => me.Descendants(DocElementNames.InheritDoc).Any() && !docMap.ContainsKey(memID)))
+				var methDocs = findDocsByID(docMembers, memID);
+				if (methDocs.Descendants(DocElementNames.InheritDoc).Any())
 				{
 					logger.Write(ILogger.Severity.Diag, null, "Processing DocID: " + memID);
 
-					om ??= m.GetBaseCandidates().FirstOrDefault();
-					if (om != null)
+					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
+					var dml = new List<DocMatch>();
+
+					var bases = om != null ? (new[] { om }).Concat(m.GetBaseCandidates()) : m.GetBaseCandidates();
+					foreach (var bm in bases)
 					{
-						var dm = new DocMatch(om.GetDocID());
-						docMap.Add(memID, dm);
+						string cref = bm.GetDocID();
 
-						if (m.HasParameters)
-						{
-							var pm = new Dictionary<string, string>();
-							foreach (var pp in m.Parameters)
-								pm.Add(om.Parameters[pp.Index].Name, pp.Name);
+						if (dml.Count == 0 || crefs.Contains(cref))
+							dml.Add(new DocMatch(cref, m, bm));
 
-							dm.ParamMap = pm;
-						}
-
-						if (m.HasGenericParameters)
-						{
-							var tpm = new Dictionary<string, string>();
-							foreach (var tp in m.GenericParameters)
-								tpm.Add(om.GenericParameters[tp.Position].Name, tp.Name);
-
-							dm.TypeParamMap = tpm;
-						}
+						if (crefs.Count == 0)
+							break;
 					}
-					else if (md.Descendants(DocElementNames.InheritDoc).FirstOrDefault(i => i.HasAttribute(DocAttributeNames.Cref)) is XElement inh)
-					{
-						var dm = new DocMatch(inh.Attribute(DocAttributeNames.Cref).Value);
-						docMap.Add(memID, dm);
 
-						if (m.HasParameters)
-							dm.ParamMap = m.Parameters.ToDictionary(p => p.Name, p => p.Name);
+					foreach (var cref in crefs.Where(c => !dml.Any(dm => dm.Cref == c)))
+						dml.Add(new DocMatch(cref, m));
 
-						if (m.HasGenericParameters)
-							dm.TypeParamMap = m.GenericParameters.ToDictionary(p => p.Name, p => p.Name);
-					}
+					if (dml.Count > 0)
+						docMap.Add(memID, dml);
 					else
-					{
 						logger.Write(ILogger.Severity.Info, null, "No inherit candidate for: " + memID);
-					}
 				}
 			}
 		}
@@ -206,45 +194,48 @@ internal class InheritDocProcessor
 		return docMap;
 	}
 
-	private static void replaceInheritDoc(XElement mem, IDictionary<string, DocMatch> docMap, XElement members, XDocument refDocs, ILogger logger)
+	private static void replaceInheritDoc(XElement mem, IDictionary<string, IEnumerable<DocMatch>> docMap, XElement members, XDocument refDocs, ILogger logger)
 	{
 		if (mem.HasAttribute(DocAttributeNames._visited))
 			return;
 
 		mem.SetAttributeValue(DocAttributeNames._visited, true);
 		string memID = mem.Attribute(DocAttributeNames.Name).Value;
-		docMap.TryGetValue(memID, out var dm);
+		docMap.TryGetValue(memID, out var dml);
 
 		foreach (var inh in mem.Descendants(DocElementNames.InheritDoc).ToArray())
 		{
-			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dm?.Cref;
+			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dml?.First().Cref;
 			if (string.IsNullOrEmpty(cref))
 			{
 				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoBase, "Cref not present and no base could be found for: " + memID);
 				continue;
 			}
 
-			dm ??= new DocMatch(cref!);
+			var dm = dml?.FirstOrDefault(d => d.Cref == cref) ?? new DocMatch(cref!);
 
 			var doc = findDocsByID(refDocs.Root, cref!).FirstOrDefault();
 			if (doc != null)
 			{
-				inheritDocs(inh, doc, dm, logger);
+				inheritDocs(memID, inh, doc, dm, logger);
 				continue;
 			}
 
 			doc = findDocsByID(members, cref!).FirstOrDefault();
 			if (doc is null)
+			{
+				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoDocs, "No matching documentation could be found for: " + memID + ", which attempts to inherit from: " + cref);
 				continue;
+			}
 
 			if (doc.Descendants(DocElementNames.InheritDoc).Any())
 				replaceInheritDoc(doc, docMap, members, refDocs, logger);
 
-			inheritDocs(inh, doc, dm, logger);
+			inheritDocs(memID, inh, doc, dm, logger);
 		}
 	}
 
-	private static void inheritDocs(XElement inh, XElement doc, DocMatch dm, ILogger logger)
+	private static void inheritDocs(string memID, XElement inh, XElement doc, DocMatch dm, ILogger logger)
 	{
 		logger.Write(ILogger.Severity.Diag, null, "Inheriting docs from: " + dm.Cref);
 
@@ -262,17 +253,9 @@ internal class InheritDocProcessor
 				startPath += "[@" + DocAttributeNames.Name + "='" + SecurityElement.Escape(parName) + "']";
 
 			docBase = docBase.XPathSelectElement(startPath);
-			if (docBase is null)
-			{
-				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoNode, "No matching elements found for \"" + dm.Cref + "\" path=\"" + startPath + "\"");
-				return;
-			}
 		}
 
-		var nodes = docBase.XPathSelectNodes(xpath).ToList();
-		if (nodes.Count == 0)
-			logger.Write(ILogger.Severity.Warn, ErrorCodes.NoNode, "No matching nodes found for \"" + dm.Cref + "\" path=\"" + xpath + "\"");
-
+		var nodes = (docBase?.XPathSelectNodes(xpath) ?? XElement.EmptySequence).ToList();
 		for (int i = nodes.Count - 1; i >= 0; --i)
 		{
 			if (!(nodes[i] is XElement elem))
@@ -323,6 +306,9 @@ internal class InheritDocProcessor
 		if (nodes.Count > 0 && nodes[0].IsWhiteSpace())
 			nodes.RemoveAt(0);
 
+		if (nodes.Count == 0)
+			logger.Write(ILogger.Severity.Warn, ErrorCodes.NoNode, "No matching non-duplicate nodes found for: " + memID + ", which attempts to inherit from: " + dm.Cref + " path=\"" + xpath + "\"");
+
 		inh.ReplaceWith(nodes);
 	}
 
@@ -341,7 +327,7 @@ internal class InheritDocProcessor
 
 		foreach (string docPath in docPaths)
 		{
-			string path = docPath;
+			string path = Path.GetFullPath(docPath);
 			logger.Write(ILogger.Severity.Diag, null, "Trying ref doc path: " + path);
 
 			if (!File.Exists(path))
@@ -454,6 +440,51 @@ internal class InheritDocProcessor
 		public IReadOnlyDictionary<string, string> ParamMap = emptyMap;
 
 		public DocMatch(string cref) => Cref = cref;
+
+		public DocMatch(string cref, TypeReference t, TypeReference? bt = null) : this(cref)
+		{
+			if (t.HasGenericParameters && (bt?.IsGenericInstance ?? true))
+			{
+				var tpm = new Dictionary<string, string>();
+
+				if (bt != null)
+				{
+					var ga = ((GenericInstanceType)bt).GenericArguments;
+					var rbt = bt.Resolve();
+
+					foreach (var tp in t.GenericParameters.Where(p => ga.Contains(p)))
+						tpm.Add(rbt.GenericParameters[ga.IndexOf(tp)].Name, tp.Name);
+				}
+				else
+				{
+					foreach (var tp in t.GenericParameters)
+						tpm.Add(tp.Name, tp.Name);
+				}
+
+				TypeParamMap = tpm;
+			}
+		}
+
+		public DocMatch(string cref, MethodDefinition m, MethodDefinition? bm = null) : this(cref)
+		{
+			if (m.HasParameters)
+			{
+				var pm = new Dictionary<string, string>();
+				foreach (var pp in m.Parameters)
+					pm.Add(bm?.Parameters[pp.Index].Name ?? pp.Name, pp.Name);
+
+				ParamMap = pm;
+			}
+
+			if (m.HasGenericParameters)
+			{
+				var tpm = new Dictionary<string, string>();
+				foreach (var tp in m.GenericParameters)
+					tpm.Add(bm?.GenericParameters[tp.Position].Name ?? tp.Name, tp.Name);
+
+				TypeParamMap = tpm;
+			}
+		}
 	}
 }
 

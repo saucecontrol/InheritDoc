@@ -15,9 +15,9 @@ How to Use It
 
     This is a development-only dependency; it will not be deployed with or referenced by your compiled app/library.
 
-3) There is no 3.
+3) Build your project as you normally would.
 
-    Once the package reference is added to your project, the XML docs will be processed automatically with each build.
+    The XML docs will be post-processed automatically with each build, whether you use Visual Studio, dotnet CLI, or anything else that hosts the MSBuild engine.
 
 How it Works
 ------------
@@ -61,7 +61,7 @@ public class A : IY
     /// Returns value <paramref name="t" />
     /// of type <typeparamref name="T" />
     /// </returns>
-    public virtual T M<T>(T t) { }
+    public virtual T M<T>(T t) => t;
 
     /// <summary>Overloaded Method O</summary>
     /// <param name="s">Param s</param>
@@ -80,7 +80,7 @@ public class B : A
     public override void Y() { }
 
     /// <inheritdoc />
-    public override TValue M<TValue>(TValue value) { }
+    public override TValue M<TValue>(TValue value) => value;
 }
 ```
 
@@ -210,7 +210,7 @@ The same can be achieved by conditionally incuding the NuGet package
 
 ```XML
 <ItemGroup Condition="'$(Configuration)'!='Debug'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="0.2.0" PrivateAssets="all" />
+    <PackageReference Include="SauceControl.InheritDoc" Version="0.3.0" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -240,9 +240,9 @@ Warnings can be selectively disabled with the MSBuild standard `NoWarn` property
 | Code | Description |
 |------|-------------|
 |IDT001| Indicates a referenced XML documentation file could not be loaded or parsed or that the file did not contain documentation in the standard schema. |
-|IDT002| Typically indicates incomplete XML docs for referenced assemblies. I.E. an inheritance candidate was identified but had no documentaion to inherit. |
+|IDT002| Indicates incomplete XML docs for the target assembly or one of its external references. i.e. an inheritance candidate was identified but had no documentaion to inherit. |
 |IDT003| May indicate you used `<inheritdoc />` on a type/member with no identifiable base. You may correct this warning by using the `cref` attribute to identify the base explicitly. |
-|IDT004| May indicate an incorrect XPATH value in a `path` attribute. |
+|IDT004| May indicate an incorrect XPATH value in a `path` attribute or a duplicate/superfluous `<inheritdoc />` tag. |
 
 Known Issues
 ------------

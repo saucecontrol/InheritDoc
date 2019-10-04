@@ -11,7 +11,7 @@ internal static class CecilExtensions
 
 	private static readonly string[] ignoredModifiers = new[] {
 		"System.Runtime.InteropServices.InAttribute",
-		"System.Runtime.CompilerServices.CallConvCdecl",
+		"System.Runtime.CompilerServices.CallConvCdecl"
 	};
 
 	private static readonly string[] ignoredBaseTypes = new[] {
@@ -64,13 +64,15 @@ internal static class CecilExtensions
 
 	public static IEnumerable<TypeReference> GetBaseCandidates(this TypeDefinition t)
 	{
+		var it = t;
+
 		while (t.BaseType != null && !ignoredBaseTypes.Contains(t.BaseType.FullName))
 		{
 			yield return t.BaseType;
 			t = t.BaseType.Resolve();
 		}
 
-		foreach (var i in t.Interfaces)
+		foreach (var i in it.Interfaces)
 			yield return i.InterfaceType;
 
 		if (t.BaseType != null && ignoredBaseTypes.Contains(t.BaseType.FullName))
@@ -80,17 +82,18 @@ internal static class CecilExtensions
 	public static IEnumerable<MethodDefinition> GetBaseCandidates(this MethodDefinition m)
 	{
 		if ((m.IsVirtual && m.IsReuseSlot) || m.IsConstructor)
-			yield return getBaseMethodFromType(m, m.DeclaringType.BaseType)!;
+			foreach (var md in getBaseCandidatesFromType(m, m.DeclaringType.BaseType))
+				yield return md;
 
-		foreach (var md in m.DeclaringType.Interfaces.Select(i => getBaseMethodFromType(m, i.InterfaceType)).Where(c => c != null))
-			yield return md!;
+		foreach (var md in m.DeclaringType.Interfaces.SelectMany(i => getBaseCandidatesFromType(m, i.InterfaceType)))
+			yield return md;
 	}
 
 	private static EventDefinition getEventForMethod(MethodDefinition method) => method.DeclaringType.Events.First(e => e.InvokeMethod == method || e.AddMethod == method || e.RemoveMethod == method);
 
 	private static PropertyDefinition getPropertyForMethod(MethodDefinition method) => method.DeclaringType.Properties.First(p => p.GetMethod == method || p.SetMethod == method);
 
-	private static MethodDefinition? getBaseMethodFromType(MethodDefinition om, TypeReference bt)
+	private static IEnumerable<MethodDefinition> getBaseCandidatesFromType(MethodDefinition om, TypeReference bt)
 	{
 		var genMap = new Dictionary<TypeReference, TypeReference>();
 
@@ -102,48 +105,41 @@ internal static class CecilExtensions
 			{
 				var gi = (GenericInstanceType)bt;
 				for (int i = 0; i < gi.GenericArguments.Count; i++)
-					genMap.Add(rbt.GenericParameters[i], gi.GenericArguments[i]);
+					genMap[rbt.GenericParameters[i]] = gi.GenericArguments[i];
 
-				foreach (var ga in genMap.ToList().Where(kv => genMap.ContainsKey(kv.Value)))
+				foreach (var ga in genMap.Where(kv => genMap.ContainsKey(kv.Value)).ToList())
 					genMap[ga.Key] = genMap[ga.Value];
 			}
 
-			foreach (var meth in rbt.Methods.Where(m => m.Name == om.Name && m.Parameters.Count == om.Parameters.Count))
+			foreach (var bm in rbt.Methods.Where(m => m.Name == om.Name && m.Parameters.Count == om.Parameters.Count))
 			{
-				var mp = meth.ReturnType;
-				var op = om.ReturnType;
-				if (!areParamTypesEquivalent(mp, op, genMap))
+				if (!areParamTypesEquivalent(bm.ReturnType, om.ReturnType, genMap))
 					continue;
 
-				int matchedparms = 0;
-				for (int i = 0; i < meth.Parameters.Count; i++)
+				bool match = true;
+				for (int i = 0; i < bm.Parameters.Count; i++)
 				{
-					mp = meth.Parameters[i].ParameterType;
-					op = om.Parameters[i].ParameterType;
-					if (!areParamTypesEquivalent(mp, op, genMap))
-						continue;
-
-					matchedparms++;
+					if (!areParamTypesEquivalent(bm.Parameters[i].ParameterType, om.Parameters[i].ParameterType, genMap))
+					{
+						match = false;
+						break;
+					}
 				}
 
-				if (matchedparms != meth.Parameters.Count)
-					continue;
-
-				return meth;
+				if (match)
+					yield return bm;
 			}
 
 			bt = rbt.BaseType;
 		}
-
-		return null;
 	}
 
 	private static bool areParamTypesEquivalent(TypeReference mp, TypeReference op, IDictionary<TypeReference, TypeReference> genMap)
 	{
-		if (((mp.IsRequiredModifier && op.IsRequiredModifier) || (mp.IsOptionalModifier && op.IsOptionalModifier)) && mp is IModifierType mpm && op is IModifierType opm)
+		if (mp is IModifierType mpm && op is IModifierType opm)
 			return areParamTypesEquivalent(mpm.ModifierType, opm.ModifierType, genMap) && areParamTypesEquivalent(mpm.ElementType, opm.ElementType, genMap);
 
-		if (mp.IsArray && op.IsArray && mp is ArrayType mpa && op is ArrayType opa)
+		if (mp is ArrayType mpa && op is ArrayType opa)
 			return mpa.Rank == opa.Rank && areParamTypesEquivalent(mpa.ElementType, opa.ElementType, genMap);
 
 		if (mp is TypeSpecification mpe && op is TypeSpecification ope)
@@ -160,36 +156,20 @@ internal static class CecilExtensions
 	{
 		string? suffix = null;
 
-		while (tr.IsPointer || tr.IsByReference || tr.IsPinned || tr.IsRequiredModifier || tr.IsOptionalModifier || tr.IsArray)
+		while (!tr.IsGenericInstance && !tr.IsFunctionPointer && tr is TypeSpecification ts)
 		{
 			if (tr.IsPointer)
-			{
-				tr = ((PointerType)tr).ElementType;
 				suffix = "*" + suffix;
-			}
-			if (tr.IsByReference)
-			{
-				tr = ((ByReferenceType)tr).ElementType;
+			else if (tr.IsByReference)
 				suffix = "@" + suffix;
-			}
-			if (tr.IsPinned)
-			{
-				tr = ((PinnedType)tr).ElementType;
+			else if (tr.IsPinned)
 				suffix = "^" + suffix;
-			}
-			if (tr.IsRequiredModifier || tr.IsOptionalModifier)
-			{
-				var mt = (IModifierType)tr;
-				tr = mt.ElementType;
-				if (!ignoredModifiers.Contains(mt.ModifierType.FullName))
-					suffix = (tr.IsRequiredModifier ? "|" : "!") + mt.ModifierType.FullName + suffix;
-			}
-			if (tr.IsArray)
-			{
-				var at = (ArrayType)tr;
-				tr = at.ElementType;
+			else if (tr is IModifierType mt && !ignoredModifiers.Contains(mt.ModifierType.FullName))
+				suffix = (tr.IsRequiredModifier ? "|" : "!") + mt.ModifierType.FullName + suffix;
+			else if (tr is ArrayType at)
 				suffix = "[" + string.Join(",", at.Dimensions.Select(d => d.IsSized ? d.LowerBound?.ToString() + ":" + d.UpperBound?.ToString() : null)) + "]" + suffix;
-			}
+
+			tr = ts.ElementType;
 		}
 
 		if (tr.IsFunctionPointer)

@@ -28,9 +28,11 @@ public class InheritDocTask : Task
 			logger.Write(ILogger.Severity.Info, null, nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths);
 			logger.Write(ILogger.Severity.Info, null, nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths);
 
-			InheritDocProcessor.InheritDocs(AssemblyPath, DocumentationPath, DocumentationPath, RefAssemblyPaths?.Split(';') ?? Array.Empty<string>(), AdditionalDocPaths?.Split(';') ?? Array.Empty<string>(), logger);
-			logger.Write(ILogger.Severity.Message, null, nameof(InheritDocTask) + " processed " + Path.GetFullPath(DocumentationPath));
+			var refPaths = RefAssemblyPaths?.Split(';') ?? Array.Empty<string>();
+			var addPaths = AdditionalDocPaths?.Split(';') ?? Array.Empty<string>();
+			var result = InheritDocProcessor.InheritDocs(AssemblyPath, DocumentationPath, DocumentationPath, refPaths, addPaths, logger);
 
+			logger.Write(ILogger.Severity.Message, null, $"{nameof(InheritDocTask)} replaced {result.Item1} of {result.Item2} tags in {Path.GetFullPath(DocumentationPath)}");
 			return true;
 		}
 		catch (Exception ex)

@@ -16,6 +16,7 @@
 	<Target Name="AddNonStringAssemblyInfoAttributes" AfterTargets="CoreGenerateAssemblyInfo" Outputs="$(AssemblyInfoFile)">
 
 		<ItemGroup>
+			<AssemblyInfoLines Include="[assembly:System.CLSCompliant(true)]" />
 			<AssemblyInfoLines Include="[assembly:System.Runtime.InteropServices.ComVisible(false)]" />
 		</ItemGroup>
 

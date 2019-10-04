@@ -84,6 +84,13 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
+	public void CrefOverridesDefaultBase()
+	{
+		var ele = getDocElement("T:" + GIS<string>.T_ID, "typeparam[@name='TT']");
+		Assert.AreEqual("TypeParam TG", ele?.Value);
+	}
+
+	[TestMethod]
 	public void TypeParamRefRemapped()
 	{
 		var ele = getDocElement("M:" + GIG<string>.M_ID, "returns/typeparamref[@name='MT']");

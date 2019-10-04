@@ -32,7 +32,8 @@ public interface IZ
 }
 
 /// <summary>Interface IG</summary>
-public interface IG<T>
+/// <typeparam name="TG">TypeParam TG</typeparam>
+public interface IG<TG>
 {
 	/// <summary>Method M</summary>
 	/// <typeparam name="U">TypeParam U</typeparam>
@@ -198,6 +199,16 @@ public class GIG<TT> : GG<TT>, IG<TT> where TT : class
 	public GIG() { }
 
 	unsafe MT[] IG<TT>.M<MT>(MT* mtp) => default;
+}
+
+/// <inheritdoc cref="IG{TG}" />
+public class GIS<TT> : GG<TT>, IG<TT> where TT : class
+{
+	internal const string T_ID = nameof(GIS<TT>) + "`1";
+	internal const string M_ID = T_ID + "." + nameof(M) + "``1(``0*)";
+
+	/// <inheritdoc />
+	unsafe public virtual MT[] M<MT>(MT* mtp) where MT : unmanaged => default;
 }
 
 /// <inheritdoc />
