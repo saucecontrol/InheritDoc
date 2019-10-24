@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 
 using Mono.Cecil;
@@ -24,9 +25,12 @@ internal static class CecilExtensions
 
 	// DocID generation and type/parameter encoding is described here:
 	// https://docs.microsoft.com/en-us/cpp/build/reference/dot-xml-file-processing
+	// https://github.com/dotnet/csharplang/blob/master/spec/documentation-comments.md#id-string-format
 	public static string GetDocID(this TypeDefinition t) => "T:" + encodeTypeName(t);
 
 	public static string GetDocID(this EventDefinition e) => "E:" + encodeTypeName(e.DeclaringType) + "." + encodeMemberName(e.Name);
+
+	public static string GetDocID(this FieldDefinition f) => "F:" + encodeTypeName(f.DeclaringType) + "." + encodeMemberName(f.Name);
 
 	public static string GetDocID(this PropertyDefinition p) => "P:" + encodeTypeName(p.DeclaringType) + "." + encodeMemberName(p.Name) + encodeMethodParams(p.Parameters);
 
@@ -62,6 +66,39 @@ internal static class CecilExtensions
 
 	public static bool IsPropertyMethod(this MethodDefinition m) => m.IsGetter || m.IsSetter;
 
+	public static ApiLevel GetApiLevel(this TypeDefinition t)
+	{
+		int level = (int)ApiLevel.Public;
+
+		while (t.IsNested)
+		{
+			if (t.IsNestedPrivate)
+				return ApiLevel.Private;
+
+			level = Math.Min(level, (int)(t.IsNestedAssembly || t.IsNestedFamilyAndAssembly ? ApiLevel.Internal : ApiLevel.Public));
+			t = t.DeclaringType;
+		}
+
+		return (ApiLevel)Math.Min(level, (int)(t.IsNotPublic ? ApiLevel.Internal : ApiLevel.Public));
+	}
+
+	public static ApiLevel GetApiLevel(this MethodDefinition m)
+	{
+		if (m.IsPropertyMethod())
+			return getPropertyForMethod(m).GetApiLevel();
+
+		if (m.IsEventMethod())
+			return getEventForMethod(m).GetApiLevel();
+
+		return (ApiLevel)Math.Min((int)m.DeclaringType.GetApiLevel(), (int)getApiLevel(m));
+	}
+
+	public static ApiLevel GetApiLevel(this EventDefinition e) => (ApiLevel)Math.Min((int)e.DeclaringType.GetApiLevel(), Math.Max(Math.Max((int)getApiLevel(e.InvokeMethod), (int)getApiLevel(e.AddMethod)), (int)getApiLevel(e.RemoveMethod)));
+
+	public static ApiLevel GetApiLevel(this PropertyDefinition p) => (ApiLevel)Math.Min((int)p.DeclaringType.GetApiLevel(), Math.Max((int)getApiLevel(p.GetMethod), (int)getApiLevel(p.SetMethod)));
+
+	public static ApiLevel GetApiLevel(this FieldDefinition f) => (ApiLevel)Math.Min((int)f.DeclaringType.GetApiLevel(), (int)getApiLevel(f));
+
 	public static IEnumerable<TypeReference> GetBaseCandidates(this TypeDefinition t)
 	{
 		var it = t;
@@ -89,9 +126,13 @@ internal static class CecilExtensions
 			yield return md;
 	}
 
-	private static EventDefinition getEventForMethod(MethodDefinition method) => method.DeclaringType.Events.First(e => e.InvokeMethod == method || e.AddMethod == method || e.RemoveMethod == method);
+	private static ApiLevel getApiLevel(MethodDefinition? m) => m is null ? ApiLevel.None : m.IsPrivate ? ApiLevel.Private : m.IsAssembly || m.IsFamilyAndAssembly ? ApiLevel.Internal : ApiLevel.Public;
 
-	private static PropertyDefinition getPropertyForMethod(MethodDefinition method) => method.DeclaringType.Properties.First(p => p.GetMethod == method || p.SetMethod == method);
+	private static ApiLevel getApiLevel(FieldDefinition? f) => f is null ? ApiLevel.None : f.IsPrivate ? ApiLevel.Private : f.IsAssembly || f.IsFamilyAndAssembly ? ApiLevel.Internal : ApiLevel.Public;
+
+	private static EventDefinition getEventForMethod(MethodDefinition m) => m.DeclaringType.Events.First(e => e.InvokeMethod == m || e.AddMethod == m || e.RemoveMethod == m);
+
+	private static PropertyDefinition getPropertyForMethod(MethodDefinition m) => m.DeclaringType.Properties.First(p => p.GetMethod == m || p.SetMethod == m);
 
 	private static IEnumerable<MethodDefinition> getBaseCandidatesFromType(MethodDefinition om, TypeReference bt)
 	{

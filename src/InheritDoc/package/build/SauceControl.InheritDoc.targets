@@ -19,7 +19,7 @@
 			<FileWrites Include="@(_InheritDocBackupFile)" Condition="Exists('@(_InheritDocBackupFile)')" />
 		</ItemGroup>
 
-		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" DocumentationPath="@(DocFileItem)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" />
+		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" InDocPath="@(_InheritDocBackupFile)" OutDocPath="@(DocFileItem)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />
 
 	</Target>
 

@@ -17,6 +17,10 @@ internal static class Util
 
 	public static bool HasAttribute(this XElement e, XName name) => !(e.Attribute(name) is null);
 
+	public static int SourceLine(this XElement e) => e is IXmlLineInfo li && li.HasLineInfo() ? li.LineNumber : 0;
+
+	public static int SourceColumn(this XElement e) => e is IXmlLineInfo li && li.HasLineInfo() ? li.LinePosition : 0;
+
 	public static bool IsWhiteSpace(this XNode n) =>
 		n.NodeType == XmlNodeType.Whitespace ||
 		n.NodeType == XmlNodeType.SignificantWhitespace ||

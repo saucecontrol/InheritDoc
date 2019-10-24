@@ -28,7 +28,9 @@ public class InheritDocTests
 	{
 		string outPath = documentPath + ".after";
 
-		InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, new[] { referencePath }, Array.Empty<string>(), new DebugLogger());
+		var log = new DebugLogger() as ILogger;
+		var res = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, new[] { referencePath }, Array.Empty<string>(), ApiLevel.Internal, log);
+		log.Write(ILogger.Severity.Message, $"replaced {res.Item1} of {res.Item2} and removed {res.Item3}");
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
@@ -188,15 +190,31 @@ public class InheritDocTests
 		Assert.IsTrue(ele?.NextNode?.IsWhiteSpace() ?? false);
 	}
 
+	[TestMethod]
+	public void InternalMembersTrimmed()
+	{
+		var ele = getDocElement("F:" + W.F_ID, "summary");
+		Assert.IsNull(ele);
+	}
+
+	[TestMethod]
+	public void ProtectedMembersPreserved()
+	{
+		var ele = getDocElement("M:" + B.M_ID_P, "summary");
+		Assert.IsNotNull(ele);
+	}
+
 	private static XElement? getDocElement(string docID, string xpath) =>
 		processedDocs.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID)?.XPathSelectElement(xpath);
 
 	private class DebugLogger : ILogger
 	{
-		void ILogger.Write(ILogger.Severity severity, string? code, string msg)
+		void ILogger.Write(ILogger.Severity severity, string msg)
 		{
 			if (severity >= ILogger.Severity.Info)
-				Debug.Write(msg);
+				Debug.WriteLine(msg);
 		}
+
+		void ILogger.Warn(string code, string file, int line, int column, string msg) => Debug.WriteLine(code + ": " + msg);
 	}
 }

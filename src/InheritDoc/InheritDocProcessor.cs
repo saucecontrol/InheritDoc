@@ -10,6 +10,8 @@ using System.Collections.Generic;
 
 using Mono.Cecil;
 
+public enum ApiLevel { None, Private, Internal, Public }
+
 internal class InheritDocProcessor
 {
 	private static class DocElementNames
@@ -27,6 +29,7 @@ internal class InheritDocProcessor
 	private static class DocAttributeNames
 	{
 		public static readonly XName _visited = XName.Get("_visited");
+		public static readonly XName _trimmed = XName.Get("_trimmed");
 		public static readonly XName Cref = XName.Get("cref");
 		public static readonly XName Name = XName.Get("name");
 		public static readonly XName Path = XName.Get("path");
@@ -55,14 +58,15 @@ internal class InheritDocProcessor
 	private static readonly string refFolderToken = Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar;
 	private static readonly string libFolderToken = Path.DirectorySeparatorChar + "lib" + Path.DirectorySeparatorChar;
 
-	public static Tuple<int, int> InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ILogger logger)
+	public static Tuple<int, int, int> InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ApiLevel trimLevel, ILogger logger)
 	{
 		var doc = loadDoc(docPath);
 		var docMembers = doc.Root.Element(DocElementNames.Members);
 		int beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
+		int trimCount = 0;
 
-		if (beforeCount == 0)
-			return Tuple.Create(0, 0);
+		if (beforeCount == 0 && trimLevel == ApiLevel.None)
+			return Tuple.Create(0, 0, 0);
 
 		using var resolver = CecilExtensions.RefAssemblyResolver.Create(refPaths);
 		using var asm = AssemblyDefinition.ReadAssembly(asmPath, new ReaderParameters { AssemblyResolver = resolver });
@@ -75,29 +79,48 @@ internal class InheritDocProcessor
 			.ToList()
 		;
 
-		var docMap = generateDocMap(types, docMembers, logger);
+		var docMap = generateDocMap(types, docMembers, trimLevel, logger);
 		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
 
 		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
 		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
-		logger.Write(ILogger.Severity.Diag, null, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
+		logger.Write(ILogger.Severity.Diag, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
+
+		if (trimLevel > ApiLevel.None)
+			beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count(dm => !dm.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed)));
 
 		var mem = default(XElement);
 		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) != null)
-			replaceInheritDoc(mem, docMap, docMembers, refDocs, logger);
+			replaceInheritDoc(docPath, mem, docMap, docMembers, refDocs, logger);
 
 		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
 			md.SetAttributeValue(DocAttributeNames._visited, null);
+
+		if (trimLevel > ApiLevel.None)
+		{
+			var totrim = docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._trimmed)).ToList();
+			trimCount = totrim.Count();
+
+			foreach (var md in totrim)
+			{
+				logger.Write(ILogger.Severity.Diag, "Trimming " + (trimLevel == ApiLevel.Private ? "private" : "non-public") + " doc: " + (string)md.Attribute(DocAttributeNames.Name));
+
+				if (md.PreviousNode.IsWhiteSpace())
+					md.PreviousNode.Remove();
+
+				md.Remove();
+			}
+		}
 
 		int afterCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
 
 		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
 		doc.Save(writer);
 
-		return Tuple.Create(beforeCount - afterCount, beforeCount);
+		return Tuple.Create(beforeCount - afterCount, beforeCount, trimCount);
 	}
 
-	private static IDictionary<string, IEnumerable<DocMatch>> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ILogger logger)
+	private static IDictionary<string, IEnumerable<DocMatch>> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ApiLevel trimLevel, ILogger logger)
 	{
 		var docMap = new Dictionary<string, IEnumerable<DocMatch>>();
 
@@ -116,9 +139,15 @@ internal class InheritDocProcessor
 				continue;
 			}
 
+			if (t.GetApiLevel() <= trimLevel)
+			{
+				foreach (var md in memDocs)
+					md.SetAttributeValue(DocAttributeNames._trimmed, true);
+			}
+
 			if (memDocs.Descendants(DocElementNames.InheritDoc).Any())
 			{
-				logger.Write(ILogger.Severity.Diag, null, "Processing DocID: " + typeID);
+				logger.Write(ILogger.Severity.Diag, "Processing DocID: " + typeID);
 
 				var crefs = memDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
 				var dml = new List<DocMatch>();
@@ -150,7 +179,7 @@ internal class InheritDocProcessor
 
 				// If no docs for public explicit interface implementation, inject them
 				// including the whitespace they would have had if they had been there.
-				if (t.IsPublic && (om?.DeclaringType.IsPublic ?? false) && !findDocsByID(docMembers, memID).Any())
+				if ((om?.DeclaringType.GetApiLevel() ?? ApiLevel.None) == ApiLevel.Public && t.GetApiLevel() == ApiLevel.Public && !findDocsByID(docMembers, memID).Any())
 					docMembers.Add(
 						new XText("    "),
 							new XElement(DocElementNames.Member,
@@ -161,9 +190,15 @@ internal class InheritDocProcessor
 					);
 
 				var methDocs = findDocsByID(docMembers, memID);
+				if ((om?.DeclaringType.GetApiLevel() ?? m.GetApiLevel()) <= trimLevel)
+				{
+					foreach (var md in methDocs)
+						md.SetAttributeValue(DocAttributeNames._trimmed, true);
+				}
+
 				if (methDocs.Descendants(DocElementNames.InheritDoc).Any())
 				{
-					logger.Write(ILogger.Severity.Diag, null, "Processing DocID: " + memID);
+					logger.Write(ILogger.Severity.Diag, "Processing DocID: " + memID);
 
 					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
 					var dml = new List<DocMatch>();
@@ -186,15 +221,18 @@ internal class InheritDocProcessor
 					if (dml.Count > 0)
 						docMap.Add(memID, dml);
 					else
-						logger.Write(ILogger.Severity.Info, null, "No inherit candidate for: " + memID);
+						logger.Write(ILogger.Severity.Info, "No inherit candidate for: " + memID);
 				}
 			}
+
+			foreach (var fd in t.Fields.Where(f => f.GetApiLevel() <= trimLevel).SelectMany(f => findDocsByID(docMembers, f.GetDocID())))
+				fd.SetAttributeValue(DocAttributeNames._trimmed, true);
 		}
 
 		return docMap;
 	}
 
-	private static void replaceInheritDoc(XElement mem, IDictionary<string, IEnumerable<DocMatch>> docMap, XElement members, XDocument refDocs, ILogger logger)
+	private static void replaceInheritDoc(string file, XElement mem, IDictionary<string, IEnumerable<DocMatch>> docMap, XElement members, XDocument refDocs, ILogger logger)
 	{
 		if (mem.HasAttribute(DocAttributeNames._visited))
 			return;
@@ -208,7 +246,9 @@ internal class InheritDocProcessor
 			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dml?.First().Cref;
 			if (string.IsNullOrEmpty(cref))
 			{
-				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoBase, "Cref not present and no base could be found for: " + memID);
+				if (!mem.HasAttribute(DocAttributeNames._trimmed))
+					logger.Warn(ErrorCodes.NoBase, file, mem.SourceLine(), mem.SourceColumn(), "Cref not present and no base could be found for: " + memID);
+
 				continue;
 			}
 
@@ -217,27 +257,29 @@ internal class InheritDocProcessor
 			var doc = findDocsByID(refDocs.Root, cref!).FirstOrDefault();
 			if (doc != null)
 			{
-				inheritDocs(memID, inh, doc, dm, logger);
+				inheritDocs(file, memID, inh, doc, dm, logger);
 				continue;
 			}
 
 			doc = findDocsByID(members, cref!).FirstOrDefault();
 			if (doc is null)
 			{
-				logger.Write(ILogger.Severity.Warn, ErrorCodes.NoDocs, "No matching documentation could be found for: " + memID + ", which attempts to inherit from: " + cref);
+				if (!mem.HasAttribute(DocAttributeNames._trimmed))
+					logger.Warn(ErrorCodes.NoDocs, file, mem.SourceLine(), mem.SourceColumn(), "No matching documentation could be found for: " + memID + ", which attempts to inherit from: " + cref);
+
 				continue;
 			}
 
 			if (doc.Descendants(DocElementNames.InheritDoc).Any())
-				replaceInheritDoc(doc, docMap, members, refDocs, logger);
+				replaceInheritDoc(file, doc, docMap, members, refDocs, logger);
 
-			inheritDocs(memID, inh, doc, dm, logger);
+			inheritDocs(file, memID, inh, doc, dm, logger);
 		}
 	}
 
-	private static void inheritDocs(string memID, XElement inh, XElement doc, DocMatch dm, ILogger logger)
+	private static void inheritDocs(string file, string memID, XElement inh, XElement doc, DocMatch dm, ILogger logger)
 	{
-		logger.Write(ILogger.Severity.Diag, null, "Inheriting docs from: " + dm.Cref);
+		logger.Write(ILogger.Severity.Diag, "Inheriting docs from: " + dm.Cref);
 
 		string xpath = (string)inh.Attribute(DocAttributeNames.Path) ?? "node()";
 		var docBase = new XElement(doc);
@@ -306,10 +348,10 @@ internal class InheritDocProcessor
 		if (nodes.Count > 0 && nodes[0].IsWhiteSpace())
 			nodes.RemoveAt(0);
 
-		if (nodes.Count == 0)
-			logger.Write(ILogger.Severity.Warn, ErrorCodes.NoNode, "No matching non-duplicate nodes found for: " + memID + ", which attempts to inherit from: " + dm.Cref + " path=\"" + xpath + "\"");
-
-		inh.ReplaceWith(nodes);
+		if (nodes.Count == 0 && !inh.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed)))
+			logger.Warn(ErrorCodes.NoNode, file, inh.SourceLine(), inh.SourceColumn(), "No matching non-duplicate nodes found for: " + memID + ", which attempts to inherit from: " + dm.Cref + " path=\"" + xpath + "\"");
+		else
+			inh.ReplaceWith(nodes);
 	}
 
 	private static bool isInheritDocCandidate(XElement m) => !string.IsNullOrEmpty((string)m.Attribute(DocAttributeNames.Name)) && !m.HasAttribute(DocAttributeNames._visited) && m.Descendants(DocElementNames.InheritDoc).Any();
@@ -328,7 +370,7 @@ internal class InheritDocProcessor
 		foreach (string docPath in docPaths)
 		{
 			string path = Path.GetFullPath(docPath);
-			logger.Write(ILogger.Severity.Diag, null, "Trying ref doc path: " + path);
+			logger.Write(ILogger.Severity.Diag, "Trying ref doc path: " + path);
 
 			if (!File.Exists(path))
 			{
@@ -340,7 +382,7 @@ internal class InheritDocProcessor
 				else
 					continue;
 
-				logger.Write(ILogger.Severity.Info, null, "Using alt ref doc path: " + docPath + " -> " + path);
+				logger.Write(ILogger.Severity.Info, "Using alt ref doc path: " + docPath + " -> " + path);
 			}
 
 			using var xrd = getDocReader(path, logger);
@@ -365,7 +407,7 @@ internal class InheritDocProcessor
 			}
 			catch (XmlException ex)
 			{
-				logger.Write(ILogger.Severity.Warn, ErrorCodes.BadXml, "XML parse error in doc file: " + path + " -- " + ex.Message);
+				logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in referenced doc: " + ex.Message);
 			}
 		}
 
@@ -384,7 +426,7 @@ internal class InheritDocProcessor
 
 			if (!xrd.ReadToFollowing(DocElementNames.Doc.LocalName))
 			{
-				logger.Write(ILogger.Severity.Warn, ErrorCodes.BadXml, "Not a doc file: " + docPath);
+				logger.Warn(ErrorCodes.BadXml, docPath, 0, 0, "Not a doc file");
 				xrd.Dispose();
 
 				return null;
@@ -395,7 +437,7 @@ internal class InheritDocProcessor
 			if (!string.IsNullOrEmpty(redir))
 			{
 				string newDocPath = Util.ReplacePathSpecialFolder(redir);
-				logger.Write(ILogger.Severity.Info, null, "Doc file redirected: " + docPath + " -> " + newDocPath);
+				logger.Write(ILogger.Severity.Info, "Doc file redirected: " + docPath + " -> " + newDocPath);
 				xrd.Dispose();
 
 				return File.Exists(newDocPath) ? getDocReader(newDocPath, logger) : null;
@@ -405,7 +447,7 @@ internal class InheritDocProcessor
 		}
 		catch (Exception ex)
 		{
-			logger.Write(ILogger.Severity.Warn, ErrorCodes.BadXml, "Error loading doc file, skipping: " + ex.ToString());
+			logger.Warn(ErrorCodes.BadXml, docPath, 0, 0, "Error loading doc file, skipping: " + ex.ToString());
 			xrd?.Dispose();
 			rdr?.Dispose();
 
@@ -426,7 +468,7 @@ internal class InheritDocProcessor
 	private static XDocument loadDoc(string path)
 	{
 		using var stmdoc = File.Open(path, FileMode.Open);
-		return XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace);
+		return XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
 	}
 
 	private static IEnumerable<XElement> findDocsByID(XElement container, string docID) => container.Elements(DocElementNames.Member).Where(m => (string)m.Attribute(DocAttributeNames.Name) == docID);
@@ -492,7 +534,8 @@ internal interface ILogger
 {
 	public enum Severity { Diag, Info, Message, Warn, Error }
 
-	void Write(Severity severity, string? code, string msg);
+	void Write(Severity severity, string msg);
+	void Warn(string code, string file, int line, int column, string msg);
 }
 
 internal class ErrorCodes
