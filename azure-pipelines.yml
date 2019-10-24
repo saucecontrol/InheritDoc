@@ -1,0 +1,41 @@
+trigger:
+- master
+
+pool:
+  vmImage: 'windows-latest'
+
+name: $(Year:yy)$(DayOfYear)$(Rev:r)
+steps:
+- task: UseDotNet@2
+  inputs:
+    version: 3.1.x
+    includePreviewVersions: true
+
+- task: UseDotNet@2
+  inputs:
+    packageType: runtime
+    version: 2.1.x
+    performMultiLevelLookup: true
+
+- task: DotNetCoreCLI@2
+  displayName: Build
+  inputs:
+    command: build
+    projects: 'src/**/*.csproj'
+    arguments: '-c Release --version-suffix "preview$(Build.BuildNumber)"'
+
+- task: DotNetCoreCLI@2
+  displayName: Test
+  inputs:
+    command: test
+    projects: 'tests/**/*.csproj'
+    arguments: '-c Release'
+
+- task: NuGetCommand@2
+  displayName: Push
+  inputs:
+    command: push
+    packagesToPush: 'out/bin/**/*.nupkg;!out/bin/**/*.snupkg'
+    nuGetFeedType: internal
+    publishVstsFeed: previews
+    allowPackageConflicts: true
