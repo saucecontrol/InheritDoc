@@ -1,8 +1,9 @@
+[![NuGet](https://buildstats.info/nuget/SauceControl.InheritDoc)](https://www.nuget.org/packages/SauceControl.InheritDoc/) [![Build Status](https://dev.azure.com/saucecontrol/InheritDoc/_apis/build/status/saucecontrol.InheritDoc?branchName=master)](https://dev.azure.com/saucecontrol/InheritDoc/_build/latest?definitionId=2&branchName=master) [![Test Results](https://img.shields.io/azure-devops/tests/saucecontrol/InheritDoc/2?logo=azure-devops)](https://dev.azure.com/saucecontrol/InheritDoc/_build/latest?definitionId=2&branchName=master)
 
 InheritDoc
 ==========
 
-This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) takes a different approach from other documentation post-processing tools.  By integrating with MSBuild, it has access to the exact arguments passed to the compiler, including assembly references and the output assembly and XML documentation file paths.  As it processes `<inheritdoc />` elements, it is able to more accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This more accurate resolution of references means it can be more clever about mapping documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base type’s definition and update the documentation accordingly.
+This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) automatically replaces `<inheritdoc />` tags in your .NET XML documentation with the actual inherited docs.  By integrating with MSBuild, this tool has access to the exact arguments passed to the compiler -- including all assembly references -- making it both simpler and more capable than other documentation post-processing tools.  As it processes `<inheritdoc />` elements, it is able to more accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This means it can be more clever about mapping documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base type’s definition and update the documentation accordingly.  It can also remove documentation for non-public types/members to reduce the size of your published XML docs.
 
 How to Use It
 -------------
@@ -22,7 +23,7 @@ How to Use It
 How it Works
 ------------
 
-The InheritDoc task inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Works™.
+The InheritDoc task inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  It uses the arguments passed to the compiler to find your assembly, the XML doc file, and all referenced assemblies.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Works™.
 
 This enhances the new support for `<inheritdoc />` in Roslyn (available starting in the [VS 16.4 preview](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes-preview#net-productivity-164P1) builds), making it available to all downstream consumers of your documentation.  When using tools such as [DocFX](https://dotnet.github.io/docfx/spec/triple_slash_comments_spec.html#inheritdoc), you will no longer be [subject](https://github.com/dotnet/docfx/issues/3699) to [limitations](https://github.com/dotnet/docfx/issues/1306) around `<inheritdoc />` tag usage because the documentation will already have those tags replaced with the upstream docs.
 
@@ -62,6 +63,9 @@ public class A : IY
     /// of type <typeparamref name="T" />
     /// </returns>
     public virtual T M<T>(T t) => t;
+
+    /// <summary>Method P</summary>
+    private void P() { }
 
     /// <summary>Overloaded Method O</summary>
     /// <param name="s">Param s</param>
@@ -114,6 +118,7 @@ Once processed, the output XML documentation will look like this (results abbrev
     of type <typeparamref name="T" />
     </returns>
 </member>
+<!-- private method A.P doc removed -->
 <member name="M:A.O(System.String[],System.String,System.String)">
     <summary>Overloaded Method O</summary>
     <param name="s">Param s</param>
@@ -206,12 +211,26 @@ InheritDoc is enabled by default for all normal builds.  It can be disabled by s
 </PropertyGroup>
 ```
 
-The same can be achieved by conditionally incuding the NuGet package
+The same can be achieved by conditionally incuding the NuGet package.
 
 ```XML
 <ItemGroup Condition="'$(Configuration)'!='Debug'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="0.3.0" PrivateAssets="all" />
+    <PackageReference Include="SauceControl.InheritDoc" Version="0.4.0" PrivateAssets="all" />
 </ItemGroup>
+```
+
+*NuGet tools may include a more verbose version of the `PackageReference` tag when you add the package to your project.  The above example is all that's actually necessary.
+
+#### Configuring Doc Trimming
+
+By default, InheritDoc will remove documentation for any types/members that are not part of the assembly's public API from the output XML.  This behavior can be configured by setting the `InheritDocTrimLevel` property to one of: `none`, `private`, or `internal`.  Docs belonging to types/members with API visibility at or below the `InheritDocTrimLevel` will be removed.  The default setting is `internal`.
+
+If your internal types/members are available to other assemblies (by means of `InternalsVisibleToAttribute`) and those projects are not part of the same Visual Studio solution, you may wish to preserve the internal member docs by setting `InheritDocTrimLevel` to `private`.
+
+```XML
+<PropertyGroup>
+    <InheritDocTrimLevel>private</InheritDocTrimLevel>
+</PropertyGroup>
 ```
 
 #### Adding Candidate Docs for Inheritance
@@ -242,7 +261,7 @@ Warnings can be selectively disabled with the MSBuild standard `NoWarn` property
 |IDT001| Indicates a referenced XML documentation file could not be loaded or parsed or that the file did not contain documentation in the standard schema. |
 |IDT002| Indicates incomplete XML docs for the target assembly or one of its external references. i.e. an inheritance candidate was identified but had no documentaion to inherit. |
 |IDT003| May indicate you used `<inheritdoc />` on a type/member with no identifiable base. You may correct this warning by using the `cref` attribute to identify the base explicitly. |
-|IDT004| May indicate an incorrect XPATH value in a `path` attribute or a duplicate/superfluous `<inheritdoc />` tag. |
+|IDT004| May indicate an incorrect XPath value in a `path` attribute or a duplicate/superfluous or self-referencing `<inheritdoc />` tag. |
 
 Known Issues
 ------------
@@ -255,9 +274,9 @@ If this displeases you, you may register your discontent by commenting on the [a
 
 ### Roslyn Analyzer Bug
 
-If you attempt to build the test project from this repo using the current (as of SDK 3.0.100) version of Roslyn, it may fail with an exception related to resolving explicit interface implementations.  There are some tricky ones in the test cases.  This issue has been fixed in preview versions of Roslyn, so either use a VS 16.4 Preview build or a .NET Core SDK 5.0 preview build to get the updated version.
+If you attempt to build the test project from this repo using the current (as of SDK 3.0.100) version of `csc`, it may fail with an exception related to resolving explicit interface implementations.  There are some tricky ones in the test cases.  This issue has been fixed in preview versions of Roslyn, so either use a VS 16.4 Preview build or a .NET Core SDK 3.1 preview build to get the updated version.
 
 Troubleshooting
 ---------------
 
-Because this MSBuild Task is supposed to Just Work™, there is very little configuration to do, and MSBuild Tasks are a bit of a dark art anyway.  If it doesn't work for you, check the detailed output from MSBuild (e.g. `dotnet build -v detailed`) and look for `InheritDoc` in the logs.  You should have some info about why the task failed to run in there.  Issue reports are, of course, welcome with good repro steps.
+When it runs, `InheritDocTask` will log a success message to the build output, telling you what it did.  If you don't see the message, it didn't run for some reason.  Check the detailed output from MSBuild (e.g. `dotnet build -v detailed`) and look for `InheritDoc` in the logs for clues.  Issue reports are, of course, welcome with good repro steps.
