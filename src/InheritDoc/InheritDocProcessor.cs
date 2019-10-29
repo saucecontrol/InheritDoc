@@ -9,6 +9,8 @@ using System.Security;
 using System.Collections.Generic;
 
 using Mono.Cecil;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 public enum ApiLevel { None, Private, Internal, Public }
 
@@ -385,6 +387,11 @@ internal class InheritDocProcessor
 				logger.Write(ILogger.Severity.Info, "Using alt ref doc path: " + docPath + " -> " + path);
 			}
 
+			var temporaryPath = TemporaryPath(path);
+			if (temporaryPath != null && File.Exists(temporaryPath))
+			{
+				path = temporaryPath;
+			}
 			using var xrd = getDocReader(path, logger);
 			if (xrd is null)
 				continue;
@@ -407,11 +414,105 @@ internal class InheritDocProcessor
 			}
 			catch (XmlException ex)
 			{
-				logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in referenced doc: " + ex.Message);
+				if (temporaryPath != null && TryRecreateFile(doc, refCref, path, temporaryPath, logger))
+				{
+					logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in doc file: " + path + " - Recreated file without bad sections.");
+				}
+				else
+				{
+					logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in doc file: " + path + " -- " + ex.Message);
+				}
 			}
 		}
 
 		return doc;
+	}
+
+	private static readonly Lazy<Regex> _nodeStart = new Lazy<Regex>(() => new Regex("<" + DocElementNames.Member + " name="));
+	private static readonly Lazy<Regex> _nodeEnd = new Lazy<Regex>(() => new Regex("</" + DocElementNames.Member + ">"));
+	private static bool TryRecreateFile(XDocument doc, IReadOnlyCollection<string> refCref, string path, string temporaryPath, ILogger logger)
+	{
+		try
+		{
+			var fileInfo = new FileInfo(temporaryPath);
+			if (!fileInfo.Directory.Exists)
+			{
+				fileInfo.Directory.Create();
+			}
+
+			using var reader = new StreamReader(path);
+			using var writer = new StreamWriter(temporaryPath);
+			var sb = new StringBuilder();
+			writer.WriteLine(@"<?xml version=""1.0"" encoding=""utf-8""?>");
+			writer.WriteLine("<" + DocElementNames.Doc + ">");
+			writer.WriteLine("  <" + DocElementNames.Members + ">");
+
+			bool inMember = false;
+
+			while (!reader.EndOfStream)
+			{
+				var line = reader.ReadLine();
+				if (inMember && _nodeEnd.Value.IsMatch(line))
+				{
+					sb.AppendLine(line);
+					try
+					{
+						var node = XElement.Parse(sb.ToString());
+
+						var nameAttr = node.Attribute(DocAttributeNames.Name.LocalName);
+
+						if (nameAttr != null && refCref.Contains(nameAttr.Value))
+						{
+							doc.Root.Add(node);
+						}
+
+						writer.Write(sb.ToString());
+					}
+					catch
+					{
+						logger.Write(ILogger.Severity.Diag, "Ignoring bad XML: " + sb.ToString());
+					}
+					sb.Clear();
+					inMember = false;
+				}
+				else if (!inMember && _nodeStart.Value.IsMatch(line))
+				{
+					sb.AppendLine(line);
+					inMember = true;
+				}
+				else if (inMember)
+				{
+					sb.AppendLine(line);
+				}
+			}
+
+			writer.WriteLine("  </" + DocElementNames.Members + ">");
+			writer.WriteLine("</" + DocElementNames.Doc + ">");
+			writer.Flush();
+			return true;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static string? TemporaryPath(string path)
+	{
+		if (!File.Exists(path))
+		{
+			return null;
+		}
+
+		return Path.Combine(Path.GetTempPath(), typeof(InheritDocProcessor).Assembly.GetName().Name, Hash() + ".xml");
+
+		string Hash()
+		{
+			using var sha = SHA1.Create();
+			using var fs = File.OpenRead(path);
+			var hash = sha.ComputeHash(fs);
+			return hash.Aggregate(string.Empty, (result, current) => result += current.ToString("x2"));
+		}
 	}
 
 	private static XmlReader? getDocReader(string docPath, ILogger logger)
