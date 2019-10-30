@@ -6,6 +6,9 @@ pool:
 
 name: $(Year:yy)$(DayOfYear)$(Rev:r)
 steps:
+- task: NuGetAuthenticate@0
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+
 - task: UseDotNet@2
   displayName: Ensure 3.1 SDK
   inputs:
@@ -19,25 +22,12 @@ steps:
     version: 2.1.x
     performMultiLevelLookup: true
 
-- task: DotNetCoreCLI@2
+- script: dotnet build src\InheritDoc -c Release --version-suffix ci$(Build.BuildNumber)
   displayName: Build
-  inputs:
-    command: build
-    projects: 'src/**/*.csproj'
-    arguments: '-c Release --version-suffix ci$(Build.BuildNumber)'
 
-- task: DotNetCoreCLI@2
+- script: dotnet test tests\InheritDoc.Test -c Release
   displayName: Test
-  inputs:
-    command: test
-    projects: 'tests/**/*.csproj'
-    arguments: '-c Release'
 
-- task: DotNetCoreCLI@2
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+- script: dotnet nuget push --api-key AzureArtifacts --source https://pkgs.dev.azure.com/saucecontrol/InheritDoc/_packaging/inheritdoc_ci/nuget/v3/index.json out\bin\InheritDoc\Release\SauceControl.InheritDoc.*.nupkg
   displayName: Push
-  inputs:
-    command: push
-    packagesToPush: 'out/bin/**/*.nupkg'
-    nuGetFeedType: internal
-    publishVstsFeed: dd014012-9652-4bcb-ab13-4246c21ac23d/d8fa8e21-ef37-4a2b-a7d6-795faf41e3be
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
