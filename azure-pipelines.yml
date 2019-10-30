@@ -25,9 +25,14 @@ steps:
 - script: dotnet build src\InheritDoc -c Release --version-suffix ci$(Build.BuildNumber)
   displayName: Build
 
-- script: dotnet test tests\InheritDoc.Test -c Release
+- script: dotnet test tests\InheritDoc.Test -c Release --logger trx --collect "code coverage"
   displayName: Test
 
 - script: dotnet nuget push --api-key AzureArtifacts --source https://pkgs.dev.azure.com/saucecontrol/InheritDoc/_packaging/inheritdoc_ci/nuget/v3/index.json out\bin\InheritDoc\Release\SauceControl.InheritDoc.*.nupkg
   displayName: Push
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+
+- task: PublishTestResults@2
+  inputs:
+    testRunner: VSTest
+    testResultsFiles: '**/*.trx'
