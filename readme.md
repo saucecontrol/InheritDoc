@@ -3,14 +3,14 @@
 InheritDoc
 ==========
 
-This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) automatically replaces `<inheritdoc />` tags in your .NET XML documentation with the actual inherited docs.  By integrating with MSBuild, this tool has access to the exact arguments passed to the compiler -- including all assembly references -- making it both simpler and more capable than other documentation post-processing tools.  As it processes `<inheritdoc />` elements, it is able to more accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This means it can be more clever about mapping documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base type’s definition and update the documentation accordingly.  It can also remove documentation for non-public types/members to reduce the size of your published XML docs.
+This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) automatically replaces `<inheritdoc />` tags in your .NET XML documentation with the actual inherited docs.  By integrating with MSBuild, this tool has access to the exact arguments passed to the compiler -- including all assembly references -- making it both simpler and more capable than other documentation post-processing tools.  As it processes `<inheritdoc />` elements, it is able to more accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This means it can be more clever about mapping documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base typeâ€™s definition and update the documentation accordingly.  It can also remove documentation for non-public types/members to reduce the size of your published XML docs.
 
 How to Use It
 -------------
 
 1) Add some `<inheritdoc />` tags to your XML documentation comments.
 
-    This tool’s handling of `<inheritdoc />` tags is based on the draft [design document]( https://github.com/dotnet/csharplang/blob/812e220fe2b964d17f353cb684aa341418618b6e/proposals/inheritdoc.md) used for the new prototype Roslyn support, which is in turn based on the `<inheritdoc />` support in [Sandcastle Help File Builder]( https://ewsoftware.github.io/XMLCommentsGuide/html/86453FFB-B978-4A2A-9EB5-70E118CA8073.htm#TopLevelRules) (SHFB).
+    This toolâ€™s handling of `<inheritdoc />` tags is based on the draft [design document]( https://github.com/dotnet/csharplang/blob/812e220fe2b964d17f353cb684aa341418618b6e/proposals/inheritdoc.md) used for the new prototype Roslyn support, which is in turn based on the `<inheritdoc />` support in [Sandcastle Help File Builder]( https://ewsoftware.github.io/XMLCommentsGuide/html/86453FFB-B978-4A2A-9EB5-70E118CA8073.htm#TopLevelRules) (SHFB).
 
 2) Add the [SauceControl.InheritDoc](https://www.nuget.org/packages/SauceControl.InheritDoc) NuGet package reference to your project.
 
@@ -23,7 +23,7 @@ How to Use It
 How it Works
 ------------
 
-The InheritDoc task inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  It uses the arguments passed to the compiler to find your assembly, the XML doc file, and all referenced assemblies.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Works™.
+The InheritDoc task inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  It uses the arguments passed to the compiler to find your assembly, the XML doc file, and all referenced assemblies.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Worksâ„¢.
 
 This enhances the new support for `<inheritdoc />` in Roslyn (available starting in the [VS 16.4 preview](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes-preview#net-productivity-164P1) builds), making it available to all downstream consumers of your documentation.  When using tools such as [DocFX](https://dotnet.github.io/docfx/spec/triple_slash_comments_spec.html#inheritdoc), you will no longer be [subject](https://github.com/dotnet/docfx/issues/3699) to [limitations](https://github.com/dotnet/docfx/issues/1306) around `<inheritdoc />` tag usage because the documentation will already have those tags replaced with the upstream docs.
 
@@ -268,13 +268,22 @@ Known Issues
 
 ### Bad NETStandard Docs
 
-When targeting `netstandard2.0`, if you attempt to inherit docs from any types/members in the framework you will receive errors from InheritDoc related to malformed XML in `netstandard.xml` and then subsequent errors for each member whose documentation could not be found.  All shipping versions of `NETStandard.Library` v2.0 have bad XML documentation.  This has been corrected in `netstandard2.1` builds, but since InheritDoc resolves documentation based on assembly references at compile time, it will find the bad docs for `netstandard2.0` targets.
+When targeting `netstandard2.0`, if you attempt to inherit docs from any types/members in the framework you will receive a warning from InheritDoc related to malformed XML in `netstandard.xml` and then subsequent warnings for each member whose documentation could not be found.  All shipping versions of `NETStandard.Library` v2.0 have bad XML documentation.  This has been corrected in `netstandard2.1` builds, but since InheritDoc resolves documentation based on assembly references at compile time, it will find the bad docs if you have a `netstandard2.0` target.
 
-If this displeases you, you may register your discontent by commenting on the [associated issue](https://github.com/dotnet/standard/issues/1527) in the NETStandard repo.  In the meantime, you can either replace the `netstandard.xml` file in your NuGet package cache with a corrected file, or you can configure InheritDoc to load additional documentation file(s) that include the types referenced.
+If this displeases you, you may register your discontent by commenting on the [associated issue](https://github.com/dotnet/standard/issues/1527) in the NETStandard repo.  In the meantime, the following configuration will work around the issue.
 
-### Roslyn Analyzer Bug
+```XML
+<PropertyGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
+	<NoWarn>$(NoWarn);IDT001</NoWarn>
+</PropertyGroup>
 
-If you attempt to build the test project from this repo using the current (as of SDK 3.0.100) version of `csc`, it may fail with an exception related to resolving explicit interface implementations.  There are some tricky ones in the test cases.  This issue has been fixed in preview versions of Roslyn, so either use a VS 16.4 Preview build or a .NET Core SDK 3.1 preview build to get the updated version.
+<ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
+    <PackageDownload Include="NETStandard.Library.Ref" Version="[2.1.0]" />
+    <InheritDocReference Include="$([MSBuild]::EnsureTrailingSlash('$(NugetPackageRoot)'))netstandard.library.ref\2.1.0\ref\netstandard2.1\netstandard.xml" />
+</ItemGroup>
+```
+
+`PackageDownload` ensures the package is in the local NuGet cache without actually adding a dependency, and then the corrected/updated `netstandard.xml` is added as an explicit doc reference.  This will resolve the `IDT002` warnings.  The `IDT001` warning can then be ignored if it applies only to `netstandard.xml`.
 
 Troubleshooting
 ---------------
