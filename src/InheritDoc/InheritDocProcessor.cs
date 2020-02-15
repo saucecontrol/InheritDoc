@@ -24,6 +24,8 @@ internal class InheritDocProcessor
 		public static readonly XName TypeParam = XName.Get("typeparam");
 		public static readonly XName Overloads = XName.Get("overloads");
 		public static readonly XName Redirect = XName.Get("redirect");
+		public static readonly XName Returns = XName.Get("returns");
+		public static readonly XName Value = XName.Get("value");
 	}
 
 	private static class DocAttributeNames
@@ -60,6 +62,15 @@ internal class InheritDocProcessor
 
 	public static Tuple<int, int, int> InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ApiLevel trimLevel, ILogger logger)
 	{
+		static bool isInheritDocCandidate(XElement m) =>
+			!string.IsNullOrEmpty((string)m.Attribute(DocAttributeNames.Name)) && !m.HasAttribute(DocAttributeNames._visited) && m.Descendants(DocElementNames.InheritDoc).Any();
+
+		static XDocument loadDoc(string path)
+		{
+			using var stmdoc = File.Open(path, FileMode.Open);
+			return XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+		}
+
 		var doc = loadDoc(docPath);
 		var docMembers = doc.Root.Element(DocElementNames.Members);
 		int beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
@@ -279,6 +290,14 @@ internal class InheritDocProcessor
 
 	private static void inheritDocs(string file, string memID, XElement inh, XElement doc, DocMatch dm, ILogger logger)
 	{
+		static void removeDoc(List<XNode> nodes, int pos)
+		{
+			if (nodes.Count > pos + 1 && nodes[pos + 1].IsWhiteSpace())
+				nodes.RemoveAt(pos + 1);
+
+			nodes.RemoveAt(pos);
+		}
+
 		logger.Write(ILogger.Severity.Diag, "Inheriting docs from: " + dm.Cref);
 
 		string xpath = (string)inh.Attribute(DocAttributeNames.Path) ?? "node()";
@@ -305,6 +324,12 @@ internal class InheritDocProcessor
 
 			var ename = elem.Name;
 
+			if (ename == DocElementNames.Returns && !dm.HasReturn || ename == DocElementNames.Value && !dm.HasValue)
+			{
+				removeDoc(nodes, i);
+				continue;
+			}
+
 			if (ename == DocElementNames.Param || ename == DocElementNames.TypeParam)
 			{
 				string? pname = (string)elem.Attribute(DocAttributeNames.Name);
@@ -312,10 +337,7 @@ internal class InheritDocProcessor
 
 				if (!pmap.ContainsKey(pname))
 				{
-					if (nodes.Count > i + 1 && nodes[i + 1].IsWhiteSpace())
-						nodes.RemoveAt(i + 1);
-
-					nodes.RemoveAt(i);
+					removeDoc(nodes, i);
 					continue;
 				}
 
@@ -334,13 +356,7 @@ internal class InheritDocProcessor
 
 			var pmatch = inh.Parent.XPathSelectElement(mpath);
 			if (ename == DocElementNames.Overloads || (pmatch != null && (inheritSkipIfExists.Contains(ename) || matchAttributes.Any())))
-			{
-				if (nodes.Count > i + 1 && nodes[i + 1].IsWhiteSpace())
-					nodes.RemoveAt(i + 1);
-
-				nodes.RemoveAt(i);
-				continue;
-			}
+				removeDoc(nodes, i);
 		}
 
 		if (nodes.Count > 0 && nodes[nodes.Count - 1].IsWhiteSpace())
@@ -353,8 +369,6 @@ internal class InheritDocProcessor
 		else
 			inh.ReplaceWith(nodes);
 	}
-
-	private static bool isInheritDocCandidate(XElement m) => !string.IsNullOrEmpty((string)m.Attribute(DocAttributeNames.Name)) && !m.HasAttribute(DocAttributeNames._visited) && m.Descendants(DocElementNames.InheritDoc).Any();
 
 	static XDocument getRefDocs(IReadOnlyCollection<string> refAssemblies, IReadOnlyCollection<string> refDocs, IReadOnlyCollection<string> refCref, ILogger logger)
 	{
@@ -465,12 +479,6 @@ internal class InheritDocProcessor
 		return "T" + docID.Substring(1, lastDot - 1);
 	}
 
-	private static XDocument loadDoc(string path)
-	{
-		using var stmdoc = File.Open(path, FileMode.Open);
-		return XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
-	}
-
 	private static IEnumerable<XElement> findDocsByID(XElement container, string docID) => container.Elements(DocElementNames.Member).Where(m => (string)m.Attribute(DocAttributeNames.Name) == docID);
 
 	private class DocMatch
@@ -480,6 +488,8 @@ internal class InheritDocProcessor
 		public string Cref;
 		public IReadOnlyDictionary<string, string> TypeParamMap = emptyMap;
 		public IReadOnlyDictionary<string, string> ParamMap = emptyMap;
+		public bool HasReturn = false;
+		public bool HasValue = false;
 
 		public DocMatch(string cref) => Cref = cref;
 
@@ -526,6 +536,9 @@ internal class InheritDocProcessor
 
 				TypeParamMap = tpm;
 			}
+
+			HasReturn = m.ReturnType.FullName != "System.Void";
+			HasValue = m.IsPropertyMethod();
 		}
 	}
 }

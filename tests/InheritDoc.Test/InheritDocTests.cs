@@ -24,7 +24,7 @@ public class InheritDocTests
 	static XElement processedDocs;
 
 	[ClassInitialize]
-	public static void InheritDocProcess(TestContext ctx)
+	public static void InheritDocProcess(TestContext _)
 	{
 		string outPath = documentPath + ".after";
 
@@ -104,6 +104,13 @@ public class InheritDocTests
 	{
 		var ele = getDocElement("M:" + B.M_ID_O, ".");
 		Assert.AreEqual(1, ele?.Elements("param").Count() ?? 0);
+	}
+
+	[TestMethod]
+	public void ReturnsTrimmed()
+	{
+		var ele = getDocElement("M:" + B.M_ID_O, "returns");
+		Assert.IsNull(ele);
 	}
 
 	[TestMethod]

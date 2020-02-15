@@ -85,7 +85,8 @@ public class B : IY
 	/// <param name="s">Param s</param>
 	/// <param name="t">Param t</param>
 	/// <param name="u">Param u</param>
-	public static void O(string[] s, string t, string u) { }
+	/// <returns>Return</returns>
+	public static bool O(string[] s, string t, string u) => default;
 
 	/// <inheritdoc cref="O(string[], string, string)" />
 	public static void O(string[] s) { }

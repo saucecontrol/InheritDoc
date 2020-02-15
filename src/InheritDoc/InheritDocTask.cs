@@ -28,7 +28,7 @@ public class InheritDocTask : Task
 			var refPaths = RefAssemblyPaths?.Split(';') ?? Array.Empty<string>();
 			var addPaths = AdditionalDocPaths?.Split(';') ?? Array.Empty<string>();
 			var logger = new TaskLogger(Log, NoWarn?.Split(';') ?? Array.Empty<string>()) as ILogger;
-			var trim = Enum.TryParse<ApiLevel>(TrimLevel, true, out var t) ? t : ApiLevel.Internal;
+			var trim = (ApiLevel)Math.Min((int)(Enum.TryParse<ApiLevel>(TrimLevel, true, out var t) ? t : ApiLevel.Internal), (int)ApiLevel.Internal);
 
 			Log.LogCommandLine(MessageImportance.Normal,
 				typeof(InheritDocTask).Assembly.GetName().FullName +
