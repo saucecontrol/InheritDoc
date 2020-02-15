@@ -25,7 +25,7 @@ How it Works
 
 The InheritDoc task inserts itself between the `CoreCompile` and `CopyFilesToOutputDirectory` steps in the MSBuild process, making a backup copy of the documentation file output from the compiler and then processing it to replace `<inheritdoc />` tags.  It uses the arguments passed to the compiler to find your assembly, the XML doc file, and all referenced assemblies.  The output of InheritDoc is then used for the remainder of your build process.  The XML documentation in your output (bin) folder will be the processed version.  If you have further steps, such as building a NuGet package, the updated XML file will used in place of the original, meaning `<inheritdoc />` Just Works™.
 
-This enhances the new support for `<inheritdoc />` in Roslyn (available starting in the [VS 16.4 preview](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes-preview#net-productivity-164P1) builds), making it available to all downstream consumers of your documentation.  When using tools such as [DocFX](https://dotnet.github.io/docfx/spec/triple_slash_comments_spec.html#inheritdoc), you will no longer be [subject](https://github.com/dotnet/docfx/issues/3699) to [limitations](https://github.com/dotnet/docfx/issues/1306) around `<inheritdoc />` tag usage because the documentation will already have those tags replaced with the upstream docs.
+This enhances the new support for `<inheritdoc />` in Roslyn (available starting in [VS 16.4](https://docs.microsoft.com/en-us/visualstudio/releases/2019/release-notes-preview#net-productivity-164P1)), making it available to all downstream consumers of your documentation.  When using tools such as [DocFX](https://dotnet.github.io/docfx/spec/triple_slash_comments_spec.html#inheritdoc), you will no longer be [subject](https://github.com/dotnet/docfx/issues/3699) to [limitations](https://github.com/dotnet/docfx/issues/1306) around `<inheritdoc />` tag usage because the documentation will already have those tags replaced with the upstream docs.
 
 Some Examples
 -------------
@@ -215,7 +215,7 @@ The same can be achieved by conditionally incuding the NuGet package.
 
 ```XML
 <ItemGroup Condition="'$(Configuration)'!='Debug'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="0.4.0" PrivateAssets="all" />
+    <PackageReference Include="SauceControl.InheritDoc" Version="1.0.0" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -274,7 +274,7 @@ If this displeases you, you may register your discontent by commenting on the [a
 
 ```XML
 <PropertyGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-	<NoWarn>$(NoWarn);IDT001</NoWarn>
+    <NoWarn>$(NoWarn);IDT001</NoWarn>
 </PropertyGroup>
 
 <ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">

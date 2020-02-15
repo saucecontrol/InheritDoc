@@ -13,7 +13,7 @@ steps:
   displayName: Ensure 3.1 SDK
   inputs:
     version: 3.1.x
-    includePreviewVersions: true
+    performMultiLevelLookup: true
 
 - task: UseDotNet@2
   displayName: Ensure 2.1 Runtime
@@ -22,17 +22,17 @@ steps:
     version: 2.1.x
     performMultiLevelLookup: true
 
-- script: dotnet build src\InheritDoc -c Release --version-suffix ci$(Build.BuildNumber)
+- script: dotnet build src\InheritDoc -c Dist --version-suffix ci$(Build.BuildNumber)
   displayName: Build
 
-- script: dotnet test tests\InheritDoc.Test -c Release --logger trx --collect "code coverage"
+- script: dotnet test tests\InheritDoc.Test -c Release -s tests\runsettings --logger trx
   displayName: Test
 
-- script: dotnet nuget push --api-key AzureArtifacts --source https://pkgs.dev.azure.com/saucecontrol/InheritDoc/_packaging/inheritdoc_ci/nuget/v3/index.json out\bin\InheritDoc\Release\SauceControl.InheritDoc.*.nupkg
+- script: dotnet nuget push --api-key AzureArtifacts --source https://pkgs.dev.azure.com/saucecontrol/InheritDoc/_packaging/inheritdoc_ci/nuget/v3/index.json out\bin\InheritDoc\Dist\SauceControl.InheritDoc.*.nupkg
   displayName: Push
   condition: ne(variables['Build.Reason'], 'PullRequest')
 
 - task: PublishTestResults@2
   inputs:
     testRunner: VSTest
-    testResultsFiles: '**/*.trx'
+    testResultsFiles: out\testresults\*.trx
