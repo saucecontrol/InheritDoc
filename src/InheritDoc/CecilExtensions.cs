@@ -66,6 +66,8 @@ internal static class CecilExtensions
 
 	public static bool IsPropertyMethod(this MethodDefinition m) => m.IsGetter || m.IsSetter;
 
+	public static bool HasReturnValue(this MethodDefinition m) => m.ReturnType is TypeReference tr && tr.FullName != "System.Void";
+
 	public static ApiLevel GetApiLevel(this TypeDefinition t)
 	{
 		int level = (int)ApiLevel.Public;
@@ -152,7 +154,7 @@ internal static class CecilExtensions
 					genMap[ga.Key] = genMap[ga.Value];
 			}
 
-			foreach (var bm in rbt.Methods.Where(m => m.Name == om.Name && m.Parameters.Count == om.Parameters.Count))
+			foreach (var bm in rbt.Methods.Where(m => m.Name == om.Name && m.Parameters.Count == om.Parameters.Count && m.GenericParameters.Count == om.GenericParameters.Count))
 			{
 				if (!areParamTypesEquivalent(bm.ReturnType, om.ReturnType, genMap))
 					continue;

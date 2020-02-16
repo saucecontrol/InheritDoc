@@ -32,12 +32,12 @@ public class InheritDocTask : Task
 
 			Log.LogCommandLine(MessageImportance.Normal,
 				typeof(InheritDocTask).Assembly.GetName().FullName +
-				Environment.NewLine + "\t" + nameof(AssemblyPath) + ": " + AssemblyPath +
-				Environment.NewLine + "\t" + nameof(InDocPath) + ": " + InDocPath +
-				Environment.NewLine + "\t" + nameof(OutDocPath) + ": " + OutDocPath +
-				Environment.NewLine + "\t" + nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths +
-				Environment.NewLine + "\t" + nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths +
-				Environment.NewLine + "\t" + nameof(TrimLevel) + ": " + trim
+				Environment.NewLine + nameof(AssemblyPath) + ": " + AssemblyPath +
+				Environment.NewLine + nameof(InDocPath) + ": " + InDocPath +
+				Environment.NewLine + nameof(OutDocPath) + ": " + OutDocPath +
+				Environment.NewLine + nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths +
+				Environment.NewLine + nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths +
+				Environment.NewLine + nameof(TrimLevel) + ": " + trim
 			);
 
 			var result = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, logger);

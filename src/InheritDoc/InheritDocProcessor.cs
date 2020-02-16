@@ -537,7 +537,7 @@ internal class InheritDocProcessor
 				TypeParamMap = tpm;
 			}
 
-			HasReturn = m.ReturnType.FullName != "System.Void";
+			HasReturn = m.HasReturnValue();
 			HasValue = m.IsPropertyMethod();
 		}
 	}
