@@ -12,14 +12,15 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 [TestClass]
 public class InheritDocTests
 {
-#if NET46
-	static readonly string referencePath = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles(x86)"), @"Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6\mscorlib.dll");
-#elif NETCOREAPP2_1
-	static readonly string referencePath = Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE"), @".nuget\packages\microsoft.netcore.app\2.1.0\ref\netcoreapp2.1\System.Runtime.dll");
+#if NET48
+	const string corlibPath = @".nuget\packages\microsoft.netframework.referenceassemblies.net48\1.0.0\build\.NETFramework\v4.8\mscorlib.dll";
+#elif NETCOREAPP3_1
+	const string corlibPath = @".nuget\packages\microsoft.netcore.app.ref\3.1.0\ref\netcoreapp3.1\System.Runtime.dll";
 #endif
 
 	static readonly string assemblyPath = typeof(InheritDocTests).Assembly.Location;
 	static readonly string documentPath = Path.Combine(Path.GetDirectoryName(assemblyPath), Path.GetFileNameWithoutExtension(assemblyPath) + ".xml");
+	static readonly string[] referencePaths = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), corlibPath.Replace('\\', Path.DirectorySeparatorChar)), typeof(InheritDocProcessor).Assembly.Location };
 
 	static XElement processedDocs;
 
@@ -29,7 +30,7 @@ public class InheritDocTests
 		string outPath = documentPath + ".after";
 
 		var log = new DebugLogger() as ILogger;
-		var res = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, new[] { referencePath }, Array.Empty<string>(), ApiLevel.Internal, log);
+		var res = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, log);
 		log.Write(ILogger.Severity.Message, $"replaced {res.Item1} of {res.Item2} and removed {res.Item3}");
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);

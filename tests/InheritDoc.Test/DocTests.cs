@@ -198,7 +198,7 @@ public class GXI : Lazy<string>, IEquatable<string>
 public class GIG<TT> : GG<TT>, IG<TT> where TT : class
 {
 	internal const string T_ID = nameof(GIG<TT>) + "`1";
-	internal const string M_ID = T_ID + "." + nameof(IG<TT>) + "{" + nameof(TT) + "}#" + nameof(M) + "``1(``0*)";
+	internal const string M_ID = T_ID + "." + nameof(IG<TT>) + "{" + nameof(TT) + "}#" + nameof(IG<TT>.M) + "``1(``0*)";
 	internal const string M_ID_ctor = T_ID + ".#ctor";
 
 	/// <inheritdoc />
