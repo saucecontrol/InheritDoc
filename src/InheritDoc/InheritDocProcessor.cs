@@ -79,7 +79,7 @@ internal class InheritDocProcessor
 		if (beforeCount == 0 && trimLevel == ApiLevel.None)
 			return Tuple.Create(0, 0, 0);
 
-		using var resolver = CecilExtensions.RefAssemblyResolver.Create(refPaths);
+		using var resolver = CecilExtensions.RefAssemblyResolver.Create(asmPath, refPaths);
 		using var asm = AssemblyDefinition.ReadAssembly(asmPath, new ReaderParameters { AssemblyResolver = resolver });
 
 		var types =

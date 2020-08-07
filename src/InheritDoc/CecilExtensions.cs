@@ -245,18 +245,46 @@ internal static class CecilExtensions
 		return typeName + suffix;
 	}
 
-	internal class RefAssemblyResolver : DefaultAssemblyResolver
+	internal sealed class RefAssemblyResolver : IAssemblyResolver
 	{
-		public static RefAssemblyResolver Create(string[] refAssemblies)
+		private readonly Dictionary<string, AssemblyDefinition> cache = new Dictionary<string, AssemblyDefinition>(StringComparer.Ordinal);
+
+		public static RefAssemblyResolver Create(string mainAssembly, string[] refAssemblies)
 		{
 			var resolver = new RefAssemblyResolver();
+			var rparams = new ReaderParameters { AssemblyResolver = resolver };
 
-			foreach (var assemblyFile in refAssemblies)
-				resolver.RegisterAssembly(AssemblyDefinition.ReadAssembly(assemblyFile, new ReaderParameters { AssemblyResolver = resolver }));
+			foreach (var assemblyFile in refAssemblies.Concat(new[] { mainAssembly }))
+			{
+				var assembly = AssemblyDefinition.ReadAssembly(assemblyFile, rparams);
+				resolver.cache[assembly.FullName] = assembly;
+			}
 
 			return resolver;
 		}
 
 		private RefAssemblyResolver() { }
+
+		private bool isCompatibleName(AssemblyNameReference name, AssemblyNameReference cname) =>
+			cname.Name == name.Name && cname.PublicKeyToken.SequenceEqual(name.PublicKeyToken) && cname.Version.Major == name.Version.Major && cname.Version.Minor >= name.Version.Minor;
+
+		public AssemblyDefinition Resolve(AssemblyNameReference name)
+		{
+			if (cache.TryGetValue(name.FullName, out var match))
+				return match;
+
+			match = cache[name.FullName] = cache.Values.FirstOrDefault(c => isCompatibleName(name, c.Name));
+			return match ?? throw new AssemblyResolutionException(name);
+		}
+
+		public AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters) => Resolve(name);
+
+		public void Dispose()
+		{
+			foreach (var asm in cache.Values)
+				asm.Dispose();
+
+			cache.Clear();
+		}
 	}
 }
