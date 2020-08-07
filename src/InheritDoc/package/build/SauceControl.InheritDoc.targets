@@ -2,7 +2,7 @@
 <Project>
 
 	<PropertyGroup>
-		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(DesignTimeBuild)'!='true' and '$(BuildingForLiveUnitTesting)'!='true'">true</InheritDocEnabled>
+		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(Configuration)'!='debug' and '$(DesignTimeBuild)'!='true' and '$(BuildingForLiveUnitTesting)'!='true'">true</InheritDocEnabled>
 	</PropertyGroup>
 
 	<ItemGroup>
