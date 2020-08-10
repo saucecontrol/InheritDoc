@@ -23,7 +23,7 @@ internal static class CecilExtensions
 		"System.MulticastDelegate"
 	};
 
-	// DocID generation and type/parameter encoding is described here:
+	// DocID generation and type/parameter encoding are described here:
 	// https://docs.microsoft.com/en-us/cpp/build/reference/dot-xml-file-processing
 	// https://github.com/dotnet/csharplang/blob/master/spec/documentation-comments.md#id-string-format
 	public static string GetDocID(this TypeDefinition t) => "T:" + encodeTypeName(t);
@@ -180,7 +180,7 @@ internal static class CecilExtensions
 	private static bool areParamTypesEquivalent(TypeReference mp, TypeReference op, IDictionary<TypeReference, TypeReference> genMap)
 	{
 		if (mp is IModifierType mpm && op is IModifierType opm)
-			return areParamTypesEquivalent(mpm.ModifierType, opm.ModifierType, genMap) && areParamTypesEquivalent(mpm.ElementType, opm.ElementType, genMap);
+			return mpm.ModifierType.FullName == opm.ModifierType.FullName && areParamTypesEquivalent(mpm.ElementType, opm.ElementType, genMap);
 
 		if (mp is ArrayType mpa && op is ArrayType opa)
 			return mpa.Rank == opa.Rank && areParamTypesEquivalent(mpa.ElementType, opa.ElementType, genMap);
@@ -266,14 +266,13 @@ internal static class CecilExtensions
 		private RefAssemblyResolver() { }
 
 		private bool isCompatibleName(AssemblyNameReference name, AssemblyNameReference cname) =>
-			cname.Name == name.Name && cname.PublicKeyToken.SequenceEqual(name.PublicKeyToken) && cname.Version.Major == name.Version.Major && cname.Version.Minor >= name.Version.Minor;
+			cname.Name == name.Name && cname.PublicKeyToken.SequenceEqual(name.PublicKeyToken) && cname.Version >= name.Version;
 
 		public AssemblyDefinition Resolve(AssemblyNameReference name)
 		{
-			if (cache.TryGetValue(name.FullName, out var match))
-				return match;
+			if (!cache.TryGetValue(name.FullName, out var match))
+				cache[name.FullName] = match = cache.Values.FirstOrDefault(c => isCompatibleName(name, c.Name));
 
-			match = cache[name.FullName] = cache.Values.FirstOrDefault(c => isCompatibleName(name, c.Name));
 			return match ?? throw new AssemblyResolutionException(name);
 		}
 
