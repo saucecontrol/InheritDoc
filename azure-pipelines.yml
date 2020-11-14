@@ -7,15 +7,15 @@ pool:
 name: $(Year:yy)$(DayOfYear)$(Rev:r)
 steps:
 - task: UseDotNet@2
-  displayName: Ensure 3.1 SDK
+  displayName: Ensure 5.0 SDK
   inputs:
-    version: 3.1.x
+    version: 5.0.x
     performMultiLevelLookup: true
 
 - script: dotnet build src\InheritDoc -c Dist --version-suffix ci$(Build.BuildNumber)
   displayName: Build
 
-- script: dotnet test tests\InheritDoc.Test -c Release -s tests\runsettings --logger trx
+- script: dotnet test tests\InheritDoc.Test -c Coverage -s tests\runsettings --logger trx
   displayName: Test
 
 - task: NuGetAuthenticate@0
