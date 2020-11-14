@@ -158,6 +158,35 @@ Once processed, the output XML documentation will look like this (results abbrev
 </details>
 
 <details>
+<summary>Explicit Inheritance</summary>
+
+InheritDoc also supports the `path` attribute defined in the Roslyn draft design doc, which is analogous to the `select` attribute in SHFB.
+
+In this example, we define a custom Exception class that for some reason doesn't inherit from `System.Exception` and yet we want to use its documentation anyway.
+
+```C#
+public class ExceptionForSomeReasonNotInheritedFromSystemException
+{
+    /// <inheritdoc cref="Exception(string)" />
+    /// <param name="theErrorMessage"><inheritdoc cref="Exception(string)" path="/param[@name='message']/node()" /></param>
+    ExceptionForSomeReasonNotInheritedFromSystemException(string theErrorMessage) { }
+}
+```
+
+Outputs:
+
+```XML
+<member name="M:ExceptionForSomeReasonNotInheritedFromSystemException.#ctor(System.String)">
+    <summary>Initializes a new instance of the <see cref="T:System.Exception"></see> class with a specified error message.</summary>
+    <param name="theErrorMessage">The message that describes the error.</param>
+</member>
+```
+
+Notice the `param` element for `message` was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with the correct name.
+
+</details>
+
+<details>
 <summary>Namespace Documentation</summary>
 
 Although the .NET compilers [don't allow](https://github.com/dotnet/csharplang/issues/315) adding namespace documentation comments, some tools (including SHFB) have a [convention](https://stackoverflow.com/a/52381674/4926931) for declaring them in code. InheritDoc follows this convention.
@@ -182,35 +211,6 @@ Will output:
 
 </details>
 
-<details>
-<summary>Explicit Inheritance</summary>
-
-InheritDoc also supports the `path` attribute defined in the Roslyn draft design doc, which is analogous to the `select` attribute in SHFB.
-
-In this example, we define a custom Exception class that for some reason doesn't inherit from `System.Exeption` and yet we want to use its documentation anyway.
-
-```C#
-public class ExceptionForSomeReasonNotInheritedFromSystemException
-{
-    /// <inheritdoc cref="Exception(string)" />
-    /// <param name="theErrorMessage"><inheritdoc cref="Exception(string)" path="/param[@name='message']/node()" /></param>
-    ExceptionForSomeReasonNotInheritedFromSystemException(string theErrorMessage) { }
-}
-```
-
-Outputs:
-
-```XML
-<member name="M:ExceptionForSomeReasonNotInheritedFromSystemException.#ctor(System.String)">
-    <summary>Initializes a new instance of the <see cref="T:System.Exception"></see> class with a specified error message.</summary>
-    <param name="theErrorMessage">The message that describes the error.</param>
-</member>
-```
-
-Notice the `param` element for `message` was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with the correct name.
-
-</details>
-
 Configuration
 -------------
 
@@ -228,7 +228,7 @@ The same can be achieved by conditionally incuding the NuGet package.
 
 ```XML
 <ItemGroup Condition="'$(Configuration)'!='Debug'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="1.0.0" PrivateAssets="all" />
+    <PackageReference Include="SauceControl.InheritDoc" Version="1.1.1" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -288,9 +288,9 @@ If you configure the XML documentation output from the project property page in 
 </PropertyGroup>
 ```
 
-The above configuration will create a single `MyProject.xml` file in your project root for all target frameworks and all build configurations.  Worse, since MSBuild builds multiple target framework outputs in parallel, you may create a race condition for access to that file.
+The above configuration will create a single `MyProject.xml` file in your project root for all target frameworks and all build configurations.  Since MSBuild builds multiple target framework outputs in parallel there will be a race condition for access to that file.
 
-The simpler configuration, supported in all .NET Core SDK versions, is:
+The simpler configuration, supported in all multi-targeting capable SDK versions, is:
 
 ```XML
 <PropertyGroup>
@@ -298,7 +298,7 @@ The simpler configuration, supported in all .NET Core SDK versions, is:
 </PropertyGroup>
 ```
 
-This will automatically name your XML file the same as the assembly name and will create it in the correct `obj` folder alongside the assembly.
+This will automatically name your XML file with the same base as the assembly name and will create it in the correct `obj` folder alongside the assembly.
 
 Known Issues
 ------------
