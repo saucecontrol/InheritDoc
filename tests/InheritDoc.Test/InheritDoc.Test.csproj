@@ -11,6 +11,7 @@
 		<PackageReference Include="MSTest.TestAdapter" Version="2.1.0" />
 		<PackageReference Include="MSTest.TestFramework" Version="2.1.0" />
 		<PackageDownload Include="Microsoft.NETCore.App.Ref" Version="[3.1.0]" />
+		<PackageDownload Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="[1.0.0]" />
 	</ItemGroup>
 
 	<ItemGroup>

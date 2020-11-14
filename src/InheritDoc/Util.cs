@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 
 internal static class Util
 {
-	public static HashSet<T> ToHashSet<T>(this IEnumerable<T> e) => new HashSet<T>(e);
+	public static HashSet<T> ToHashSet<T>(this IEnumerable<T> e) => new(e);
 
 	public static IEnumerable<T> SelectManyRecursive<T>(this IEnumerable<T> e, Func<T, IEnumerable<T>> selector) =>
 		e.Any() ? e.Concat(e.SelectMany(selector).SelectManyRecursive(selector)) : e;
@@ -22,9 +22,8 @@ internal static class Util
 	public static int SourceColumn(this XElement e) => e is IXmlLineInfo li && li.HasLineInfo() ? li.LinePosition : 0;
 
 	public static bool IsWhiteSpace(this XNode n) =>
-		n.NodeType == XmlNodeType.Whitespace ||
-		n.NodeType == XmlNodeType.SignificantWhitespace ||
-		(n.NodeType == XmlNodeType.Text && string.IsNullOrWhiteSpace(((XText)n).Value));
+		(n.NodeType is XmlNodeType.Whitespace or XmlNodeType.SignificantWhitespace) ||
+		(n.NodeType is XmlNodeType.Text && string.IsNullOrWhiteSpace(((XText)n).Value));
 
 	public static IEnumerable<XNode> XPathSelectNodes(this XElement e, string xpath) =>
 		(e.XPathEvaluate(xpath) as IEnumerable)?.Cast<XNode>() ?? Enumerable.Empty<XNode>();

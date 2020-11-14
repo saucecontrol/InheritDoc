@@ -105,7 +105,7 @@ internal static class CecilExtensions
 	{
 		var it = t;
 
-		while (t.BaseType != null && !ignoredBaseTypes.Contains(t.BaseType.FullName))
+		while (t.BaseType is not null && !ignoredBaseTypes.Contains(t.BaseType.FullName))
 		{
 			yield return t.BaseType;
 			t = t.BaseType.Resolve();
@@ -114,7 +114,7 @@ internal static class CecilExtensions
 		foreach (var i in it.Interfaces)
 			yield return i.InterfaceType;
 
-		if (t.BaseType != null && ignoredBaseTypes.Contains(t.BaseType.FullName))
+		if (t.BaseType is not null && ignoredBaseTypes.Contains(t.BaseType.FullName))
 			yield return t.BaseType;
 	}
 
@@ -140,7 +140,7 @@ internal static class CecilExtensions
 	{
 		var genMap = new Dictionary<TypeReference, TypeReference>();
 
-		while (bt != null)
+		while (bt is not null)
 		{
 			var rbt = (bt.IsGenericInstance ? ((GenericInstanceType)bt).ElementType : bt).Resolve();
 
@@ -247,7 +247,7 @@ internal static class CecilExtensions
 
 	internal sealed class RefAssemblyResolver : IAssemblyResolver
 	{
-		private readonly Dictionary<string, AssemblyDefinition> cache = new Dictionary<string, AssemblyDefinition>(StringComparer.Ordinal);
+		private readonly Dictionary<string, AssemblyDefinition> cache = new(StringComparer.Ordinal);
 
 		public static RefAssemblyResolver Create(string mainAssembly, string[] refAssemblies)
 		{

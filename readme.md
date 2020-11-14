@@ -3,14 +3,14 @@
 InheritDoc
 ==========
 
-This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) automatically replaces `<inheritdoc />` tags in your .NET XML documentation with the actual inherited docs.  By integrating with MSBuild, this tool has access to the exact arguments passed to the compiler -- including all assembly references -- making it both simpler and more capable than other documentation post-processing tools.  As it processes `<inheritdoc />` elements, it is able to more accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This means it can be more clever about mapping documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base type’s definition and update the documentation accordingly.  It can also remove documentation for non-public types/members to reduce the size of your published XML docs.
+This [MSBuild Task]( https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-tasks) automatically replaces `<inheritdoc />` tags in your .NET XML documentation with the actual inherited docs.  By integrating with MSBuild, this tool has access to the exact arguments passed to the compiler -- including all assembly references -- making it both simpler and more capable than other documentation post-processing tools.  As it processes `<inheritdoc />` elements, it is able to accurately resolve base types whether they come from the target framework, referenced NuGet packages, or project references.  This allows intelligent mapping of documentation from base types and members to yours.  For example, it can identify when you change the name of a method parameter from the base type’s definition and update the documentation accordingly.  It can also remove documentation for non-public types/members to reduce the size of your published XML docs.
 
 How to Use It
 -------------
 
 1) Add some `<inheritdoc />` tags to your XML documentation comments.
 
-    This tool’s handling of `<inheritdoc />` tags is based on the draft [design document]( https://github.com/dotnet/csharplang/blob/812e220fe2b964d17f353cb684aa341418618b6e/proposals/inheritdoc.md) used for the new prototype Roslyn support, which is in turn based on the `<inheritdoc />` support in [Sandcastle Help File Builder]( https://ewsoftware.github.io/XMLCommentsGuide/html/86453FFB-B978-4A2A-9EB5-70E118CA8073.htm#TopLevelRules) (SHFB).
+    This tool’s handling of `<inheritdoc />` tags is based on the draft [design document]( https://github.com/dotnet/csharplang/blob/812e220fe2b964d17f353cb684aa341418618b6e/proposals/inheritdoc.md) used for Roslyn's support in Visual Studio, which is in turn based on the `<inheritdoc />` support in [Sandcastle Help File Builder]( https://ewsoftware.github.io/XMLCommentsGuide/html/86453FFB-B978-4A2A-9EB5-70E118CA8073.htm#TopLevelRules) (SHFB).
 
 2) Add the [SauceControl.InheritDoc](https://www.nuget.org/packages/SauceControl.InheritDoc) NuGet package reference to your project.
 
@@ -29,6 +29,11 @@ This enhances the new support for `<inheritdoc />` in Roslyn (available starting
 
 Some Examples
 -------------
+
+Click to expand samples:
+
+<details>
+<summary>Basic <code>&lt;inheritdoc /&gt;</code> Usage (Automatic Inheritance)</summary>
 
 Consider the following C#
 
@@ -150,8 +155,10 @@ Once processed, the output XML documentation will look like this (results abbrev
 </member>
 ```
 
-Advanced Examples
------------------
+</details>
+
+<details>
+<summary>Namespace Documentation</summary>
 
 Although the .NET compilers [don't allow](https://github.com/dotnet/csharplang/issues/315) adding namespace documentation comments, some tools (including SHFB) have a [convention](https://stackoverflow.com/a/52381674/4926931) for declaring them in code. InheritDoc follows this convention.
 
@@ -173,6 +180,10 @@ Will output:
 </member>
 ```
 
+</details>
+
+<details>
+<summary>Explicit Inheritance</summary>
 
 InheritDoc also supports the `path` attribute defined in the Roslyn draft design doc, which is analogous to the `select` attribute in SHFB.
 
@@ -198,12 +209,14 @@ Outputs:
 
 Notice the `param` element for `message` was excluded automatically because there was no matching parameter on the target constructor, however with a nested `<inheritdoc />` and a custom selector, we were able to extract the contents from that `param` element into a new one with the correct name.
 
+</details>
+
 Configuration
 -------------
 
 #### Enabling/Disabling InheritDoc
 
-InheritDoc is enabled by default for all normal builds.  It can be disabled by setting the `InheritDocEnabled` MSBuild property in your project.  This may be used if you wish to skip the overhead of running InheritDoc on debug builds, for example.
+InheritDoc is enabled by default for all non-debug builds.  It can be enabled or disabled explicitly by setting the `InheritDocEnabled` MSBuild property in your project.
 
 ```XML
 <PropertyGroup Condition="'$(Configuration)'=='Debug'">
@@ -263,6 +276,30 @@ Warnings can be selectively disabled with the MSBuild standard `NoWarn` property
 |IDT003| May indicate you used `<inheritdoc />` on a type/member with no identifiable base. You may correct this warning by using the `cref` attribute to identify the base explicitly. |
 |IDT004| May indicate an incorrect XPath value in a `path` attribute or a duplicate/superfluous or self-referencing `<inheritdoc />` tag. |
 
+#### Using InheritDoc With Multi-Targeted Projects
+
+If you are multi-targeting using the new(er) SDK-style projects and the `TargetFrameworks` property, you must ensure that you are not generating multiple XML documentation outputs to the same file path.
+
+If you configure the XML documentation output from the project property page in Visual Studio, you may end up with something like:
+
+```XML
+<PropertyGroup>
+    <DocumentationFile>MyProject.xml</DocumentationFile> <!-- NOOOOOOO! -->
+</PropertyGroup>
+```
+
+The above configuration will create a single `MyProject.xml` file in your project root for all target frameworks and all build configurations.  Worse, since MSBuild builds multiple target framework outputs in parallel, you may create a race condition for access to that file.
+
+The simpler configuration, supported in all .NET Core SDK versions, is:
+
+```XML
+<PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+</PropertyGroup>
+```
+
+This will automatically name your XML file the same as the assembly name and will create it in the correct `obj` folder alongside the assembly.
+
 Known Issues
 ------------
 
@@ -288,4 +325,10 @@ If this displeases you, you may register your discontent by commenting on the [a
 Troubleshooting
 ---------------
 
-When it runs, `InheritDocTask` will log a success message to the build output, telling you what it did.  If you don't see the message, it didn't run for some reason.  Check the detailed output from MSBuild (e.g. `dotnet build -v detailed`) and look for `InheritDoc` in the logs for clues.  Issue reports are, of course, welcome with good repro steps.
+When it runs, `InheritDocTask` will log a success message to the build output for each processed file, telling you what it did.  For example:
+
+```
+InheritDocTask replaced 55 of 55 inheritdoc tags and removed 60 non-public member docs in /path/to/MyProject.xml
+```
+
+If you don't see the message(s), it didn't run for some reason.  Check the detailed output from MSBuild (e.g. `dotnet build -v detailed`) and look for `InheritDoc` in the logs for clues.  Issue reports are, of course, welcome with good repro steps.

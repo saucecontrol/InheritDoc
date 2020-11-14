@@ -101,7 +101,7 @@ internal class InheritDocProcessor
 			beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count(dm => !dm.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed)));
 
 		var mem = default(XElement);
-		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) != null)
+		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) is not null)
 			replaceInheritDoc(docPath, mem, docMap, docMembers, refDocs, logger);
 
 		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
@@ -214,7 +214,7 @@ internal class InheritDocProcessor
 					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
 					var dml = new List<DocMatch>();
 
-					var bases = om != null ? (new[] { om }).Concat(m.GetBaseCandidates()) : m.GetBaseCandidates();
+					var bases = om is not null ? (new[] { om }).Concat(m.GetBaseCandidates()) : m.GetBaseCandidates();
 					foreach (var bm in bases)
 					{
 						string cref = bm.GetDocID();
@@ -266,7 +266,7 @@ internal class InheritDocProcessor
 			var dm = dml?.FirstOrDefault(d => d.Cref == cref) ?? new DocMatch(cref!);
 
 			var doc = findDocsByID(refDocs.Root, cref!).FirstOrDefault();
-			if (doc != null)
+			if (doc is not null)
 			{
 				inheritDocs(file, memID, inh, doc, dm, logger);
 				continue;
@@ -319,7 +319,7 @@ internal class InheritDocProcessor
 		var nodes = (docBase?.XPathSelectNodes(xpath) ?? XElement.EmptySequence).ToList();
 		for (int i = nodes.Count - 1; i >= 0; --i)
 		{
-			if (!(nodes[i] is XElement elem))
+			if (nodes[i] is not XElement elem)
 				continue;
 
 			var ename = elem.Name;
@@ -355,7 +355,7 @@ internal class InheritDocProcessor
 				mpath += "[" + string.Join(" and ", matchAttributes.Select(a => "@" + a.Name + "='" + SecurityElement.Escape(a.Value) + "'")) + "]";
 
 			var pmatch = inh.Parent.XPathSelectElement(mpath);
-			if (ename == DocElementNames.Overloads || (pmatch != null && (inheritSkipIfExists.Contains(ename) || matchAttributes.Any())))
+			if (ename == DocElementNames.Overloads || (pmatch is not null && (inheritSkipIfExists.Contains(ename) || matchAttributes.Any())))
 				removeDoc(nodes, i);
 		}
 
@@ -499,7 +499,7 @@ internal class InheritDocProcessor
 			{
 				var tpm = new Dictionary<string, string>();
 
-				if (bt != null)
+				if (bt is not null)
 				{
 					var ga = ((GenericInstanceType)bt).GenericArguments;
 					var rbt = bt.Resolve();
