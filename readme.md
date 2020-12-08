@@ -18,7 +18,7 @@ How to Use It
 
 3) Build your project as you normally would.
 
-    The XML docs will be post-processed automatically with each build, whether you use Visual Studio, dotnet CLI, or anything else that hosts the MSBuild engine.
+    The XML docs will be post-processed automatically with each non-debug build, whether you use Visual Studio, dotnet CLI, or anything else that hosts the MSBuild engine.
 
 How it Works
 ------------
@@ -219,16 +219,16 @@ Configuration
 InheritDoc is enabled by default for all non-debug builds.  It can be enabled or disabled explicitly by setting the `InheritDocEnabled` MSBuild property in your project.
 
 ```XML
-<PropertyGroup Condition="'$(Configuration)'=='Debug'">
+<PropertyGroup>
     <InheritDocEnabled>false</InheritDocEnabled>
 </PropertyGroup>
 ```
 
-The same can be achieved by conditionally incuding the NuGet package.
+Alternatively, you can conditionally incude the NuGet package only for specific configurations.
 
 ```XML
-<ItemGroup Condition="'$(Configuration)'!='Debug'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="1.1.1" PrivateAssets="all" />
+<ItemGroup Condition="'$(Configuration)'!='Dist'">
+    <PackageReference Include="SauceControl.InheritDoc" Version="1.2.0" PrivateAssets="all" />
 </ItemGroup>
 ```
 
