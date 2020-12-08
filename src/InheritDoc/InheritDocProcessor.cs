@@ -190,7 +190,7 @@ internal class InheritDocProcessor
 
 				// If no docs for public explicit interface implementation, inject them
 				// including the whitespace they would have had if they had been there.
-				if ((om?.DeclaringType.GetApiLevel() ?? ApiLevel.None) == ApiLevel.Public && t.GetApiLevel() == ApiLevel.Public && !findDocsByID(docMembers, memID).Any())
+				if ((om?.DeclaringType.GetApiLevel() ?? ApiLevel.None) == ApiLevel.Public && t.GetApiLevel() > trimLevel && !findDocsByID(docMembers, memID).Any())
 					docMembers.Add(
 						new XText("    "),
 							new XElement(DocElementNames.Member,

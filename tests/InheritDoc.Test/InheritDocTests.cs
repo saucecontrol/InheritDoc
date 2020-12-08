@@ -23,11 +23,13 @@ public class InheritDocTests
 	static readonly string[] referencePaths = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), corlibPath.Replace('\\', Path.DirectorySeparatorChar)), typeof(InheritDocProcessor).Assembly.Location };
 
 	static XElement processedDocs;
+	static XElement processedDocsPrivateTrim;
 
 	[ClassInitialize]
 	public static void InheritDocProcess(TestContext _)
 	{
 		string outPath = documentPath + ".after";
+		string outPathPrivateTrip = documentPath + ".privateTrim.after";
 
 		var log = new DebugLogger() as ILogger;
 		var res = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, log);
@@ -35,6 +37,11 @@ public class InheritDocTests
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
+
+		var resPrivateTrim = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrip, referencePaths, Array.Empty<string>(), ApiLevel.Private, log);
+
+		using var stmdocPrivateTrim = File.Open(outPathPrivateTrip, FileMode.Open);
+		processedDocsPrivateTrim = XDocument.Load(stmdocPrivateTrim, LoadOptions.PreserveWhitespace).Root.Element("members");
 	}
 
 	[TestMethod]
@@ -212,8 +219,23 @@ public class InheritDocTests
 		Assert.IsNotNull(ele);
 	}
 
+	[TestMethod]
+	public void InternalClassImplementsInterface(){
+		var ele = getDocElement("M:ImplementsICollection.Add(System.String)", "summary");
+		Assert.IsNull(ele);
+	}
+
+	[TestMethod]
+	public void InternalClassImplementsInterfacePrivateTrim(){
+		var ele = getDocElementPrivateTrim("M:ImplementsICollection.Add(System.String)", "summary");
+		Assert.IsNotNull(ele);
+	}
+
 	private static XElement? getDocElement(string docID, string xpath) =>
 		processedDocs.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID)?.XPathSelectElement(xpath);
+
+	private static XElement? getDocElementPrivateTrim(string docID, string xpath) =>
+		processedDocsPrivateTrim.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID)?.XPathSelectElement(xpath);
 
 	private class DebugLogger : ILogger
 	{
