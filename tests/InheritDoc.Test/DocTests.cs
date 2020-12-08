@@ -4,7 +4,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace InheritDocTest
@@ -252,38 +251,17 @@ internal class ImplementsICollection : ICollection<string>
 	bool ICollection<string>.IsReadOnly => throw new NotImplementedException();
 
 	/// <inheritdoc />
-	public void Add(string item)
-	{
-		throw new NotImplementedException();
-	}
+	public void Add(string item) => throw new NotImplementedException();
 
-	void ICollection<string>.Clear()
-	{
-		throw new NotImplementedException();
-	}
+	void ICollection<string>.Clear() => throw new NotImplementedException();
 
-	bool ICollection<string>.Contains(string item)
-	{
-		throw new NotImplementedException();
-	}
+	bool ICollection<string>.Contains(string item) => throw new NotImplementedException();
 
-	void ICollection<string>.CopyTo(string[] array, int arrayIndex)
-	{
-		throw new NotImplementedException();
-	}
+	void ICollection<string>.CopyTo(string[] array, int arrayIndex) => throw new NotImplementedException();
 
-	IEnumerator<string> IEnumerable<string>.GetEnumerator()
-	{
-		throw new NotImplementedException();
-	}
+	IEnumerator<string> IEnumerable<string>.GetEnumerator() => throw new NotImplementedException();
 
-	IEnumerator IEnumerable.GetEnumerator()
-	{
-		throw new NotImplementedException();
-	}
+	IEnumerator IEnumerable.GetEnumerator() => throw new NotImplementedException();
 
-	bool ICollection<string>.Remove(string item)
-	{
-		throw new NotImplementedException();
-	}
+	bool ICollection<string>.Remove(string item) => throw new NotImplementedException();
 }
