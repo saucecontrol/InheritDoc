@@ -6,7 +6,6 @@
 		<RepositoryUrl>https://github.com/saucecontrol/InheritDoc</RepositoryUrl>
 		<Copyright>Copyright © 2019-$([System.DateTime]::Today.Year) $(Authors)</Copyright>
 		<Title>Automatic Documentation Inheritance Processing</Title>
-		<Description>Automatically replace &lt;inheritdoc /&gt; tags with inherited documentation at build time.  Integrates with MSBuild, so no command line tool or VS add-on is required.</Description>
 
 		<RootNamespace>$(MSBuildProjectName)</RootNamespace>
 		<AssemblyName>$(Owners).$(MSBuildProjectName)</AssemblyName>
@@ -18,6 +17,7 @@
 		<PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
 		<PackageTags>Inherit, XML, Documentation, Comments, MSBuild</PackageTags>
 		<PackageReleaseNotes>See $(RepositoryUrl)/releases for release-specific notes.</PackageReleaseNotes>
+		<PackageDescription>Automatically replace &lt;inheritdoc /&gt; tags with inherited documentation at build time.  Integrates with MSBuild, so no command line tool or VS add-on is required.</PackageDescription>
 
 		<LangVersion>9</LangVersion>
 		<Features>strict</Features>

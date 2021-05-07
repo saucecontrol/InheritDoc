@@ -224,11 +224,11 @@ InheritDoc is enabled by default for all non-debug builds.  It can be enabled or
 </PropertyGroup>
 ```
 
-Alternatively, you can conditionally incude the NuGet package only for specific configurations.
+Alternatively, you can conditionally include the NuGet package only for specific configurations.
 
 ```XML
-<ItemGroup Condition="'$(Configuration)'!='Dist'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="1.2.0" PrivateAssets="all" />
+<ItemGroup Condition="'$(Configuration)'=='Dist'">
+    <PackageReference Include="SauceControl.InheritDoc" Version="1.*" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -257,6 +257,30 @@ InheritDoc will automatically discover XML documentation files alongside assembl
 </ItemGroup>
 ```
 
+#### Using InheritDoc With Multi-Targeted Projects
+
+If you are multi-targeting using the new(er) SDK-style projects and the `TargetFrameworks` property, you must ensure that you are not generating multiple XML documentation outputs to the same file path.
+
+If you configure the XML documentation output from the project property page in Visual Studio, you may end up with something like:
+
+```XML
+<PropertyGroup>
+    <DocumentationFile>MyProject.xml</DocumentationFile> <!-- NOOOOOOO! -->
+</PropertyGroup>
+```
+
+The above configuration will create a single `MyProject.xml` file in your project root for all target frameworks and all build configurations.  Since the dotnet build server builds multiple target framework outputs in parallel there will be a race condition for access to that file.
+
+The simpler configuration, supported in all multi-targeting capable SDK versions, is:
+
+```XML
+<PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+</PropertyGroup>
+```
+
+This will automatically name your XML file with the same base as the assembly name and will create it in the correct `obj` folder alongside the assembly.
+
 #### Disabling InheritDoc Build Warnings
 
 Warnings can be selectively disabled with the MSBuild standard `NoWarn` property.  For example:
@@ -275,30 +299,6 @@ Warnings can be selectively disabled with the MSBuild standard `NoWarn` property
 |IDT002| Indicates incomplete XML docs for the target assembly or one of its external references. i.e. an inheritance candidate was identified but had no documentaion to inherit. |
 |IDT003| May indicate you used `<inheritdoc />` on a type/member with no identifiable base. You may correct this warning by using the `cref` attribute to identify the base explicitly. |
 |IDT004| May indicate an incorrect XPath value in a `path` attribute or a duplicate/superfluous or self-referencing `<inheritdoc />` tag. |
-
-#### Using InheritDoc With Multi-Targeted Projects
-
-If you are multi-targeting using the new(er) SDK-style projects and the `TargetFrameworks` property, you must ensure that you are not generating multiple XML documentation outputs to the same file path.
-
-If you configure the XML documentation output from the project property page in Visual Studio, you may end up with something like:
-
-```XML
-<PropertyGroup>
-    <DocumentationFile>MyProject.xml</DocumentationFile> <!-- NOOOOOOO! -->
-</PropertyGroup>
-```
-
-The above configuration will create a single `MyProject.xml` file in your project root for all target frameworks and all build configurations.  Since MSBuild builds multiple target framework outputs in parallel there will be a race condition for access to that file.
-
-The simpler configuration, supported in all multi-targeting capable SDK versions, is:
-
-```XML
-<PropertyGroup>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-</PropertyGroup>
-```
-
-This will automatically name your XML file with the same base as the assembly name and will create it in the correct `obj` folder alongside the assembly.
 
 Known Issues
 ------------
