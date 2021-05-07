@@ -8,13 +8,7 @@ internal static class CecilExtensions
 {
 	private const string compilerGeneratedAttribute = "System.Runtime.CompilerServices.CompilerGeneratedAttribute";
 
-	private const string namespaceDocPlaceholderType = "NamespaceDoc";
-
-	private static readonly string[] ignoredModifiers = new[] {
-		"System.Runtime.InteropServices.InAttribute",
-		"System.Runtime.CompilerServices.CallConvCdecl"
-	};
-
+	// These are ignored as the base for types, defaulting the doc inheritance target to an implemented interface instead.
 	private static readonly string[] ignoredBaseTypes = new[] {
 		"System.Object",
 		"System.ValueType",
@@ -23,18 +17,32 @@ internal static class CecilExtensions
 		"System.MulticastDelegate"
 	};
 
+	private static readonly IEnumerable<string> emptyStringEnumerable = new[] { string.Empty };
+
 	// DocID generation and type/parameter encoding are described here:
 	// https://docs.microsoft.com/en-us/cpp/build/reference/dot-xml-file-processing
 	// https://github.com/dotnet/csharplang/blob/master/spec/documentation-comments.md#id-string-format
-	public static string GetDocID(this TypeDefinition t) => "T:" + encodeTypeName(t);
+	// Roslyn's actual implementation can be found in:
+	// http://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/DocumentationComments/DocumentationCommentIDVisitor.cs
+	// http://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/DocumentationComments/DocumentationCommentIDVisitor.PartVisitor.cs
+	// Different compilers/tools generate different encodings, so we generate a list of candidates that includes each style.
+	public static string GetDocID(this TypeDefinition t) => encodeTypeName(t).Select(t => "T:" + t).First();
 
-	public static string GetDocID(this EventDefinition e) => "E:" + encodeTypeName(e.DeclaringType) + "." + encodeMemberName(e.Name);
+	public static IEnumerable<string> GetDocID(this EventDefinition e) => encodeTypeName(e.DeclaringType).SelectMany(t => encodeMemberName(e.Name).Select(m => "E:" + t + "." + m));
 
-	public static string GetDocID(this FieldDefinition f) => "F:" + encodeTypeName(f.DeclaringType) + "." + encodeMemberName(f.Name);
+	public static IEnumerable<string> GetDocID(this FieldDefinition f) => encodeTypeName(f.DeclaringType).SelectMany(t => encodeMemberName(f.Name).Select(m => "F:" + t + "." + m));
 
-	public static string GetDocID(this PropertyDefinition p) => "P:" + encodeTypeName(p.DeclaringType) + "." + encodeMemberName(p.Name) + encodeMethodParams(p.Parameters);
+	public static IEnumerable<string> GetDocID(this PropertyDefinition p)
+	{
+		var docID = encodeTypeName(p.DeclaringType).SelectMany(t => encodeMemberName(p.Name).Select(m => "P:" + t + "." + m));
+		
+		if (p.HasParameters)
+			docID = docID.SelectMany(m => encodeMethodParams(p.Parameters).Select(p => m + p));
 
-	public static string GetDocID(this MethodDefinition m)
+		return docID;
+	}
+
+	public static IEnumerable<string> GetDocID(this MethodDefinition m)
 	{
 		if (m.IsEventMethod())
 			return getEventForMethod(m).GetDocID();
@@ -42,16 +50,16 @@ internal static class CecilExtensions
 		if (m.IsPropertyMethod())
 			return getPropertyForMethod(m).GetDocID();
 
-		string docID = "M:" + encodeTypeName(m.DeclaringType) + "." + encodeMemberName(m.Name);
+		var docID = encodeTypeName(m.DeclaringType).SelectMany(t => encodeMemberName(m.Name).Select(m => "M:" + t + "." + m));
 
 		if (m.HasGenericParameters)
-			docID += "``" + m.GenericParameters.Count;
+			docID = docID.Select(id => id + "``" + m.GenericParameters.Count);
 
 		if (m.HasParameters)
-			docID += encodeMethodParams(m.Parameters);
+			docID = docID.SelectMany(id => encodeMethodParams(m.Parameters).Select(p => id + p));
 
-		if (m.Name == "op_Implicit" || m.Name == "op_Explicit")
-			docID += "~" + encodeTypeName(m.ReturnType);
+		if (m.Name is "op_Implicit" or "op_Explicit")
+			docID = docID.SelectMany(id => encodeTypeName(m.ReturnType).Select(t => id + "~" + t));
 
 		return docID;
 	}
@@ -60,7 +68,7 @@ internal static class CecilExtensions
 
 	public static bool IsCompilerGenerated(this MethodDefinition m) => m.HasCustomAttributes && m.CustomAttributes.Any(a => a.AttributeType.FullName == compilerGeneratedAttribute);
 
-	public static bool IsNamespaceDocPlaceholder(this TypeDefinition t) => t.Name == namespaceDocPlaceholderType;
+	public static bool IsNamespaceDocPlaceholder(this TypeDefinition t) => t.Name == "NamespaceDoc";
 
 	public static bool IsEventMethod(this MethodDefinition m) => m.IsFire || m.IsAddOn || m.IsRemoveOn;
 
@@ -191,58 +199,93 @@ internal static class CecilExtensions
 		return mp.MetadataToken == op.MetadataToken || mp.Resolve() == op.Resolve() || (mp.IsGenericParameter && genMap.ContainsKey(mp) && areParamTypesEquivalent(genMap[mp], op, genMap));
 	}
 
-	private static string? encodeMethodParams(ICollection<ParameterDefinition> mp) => mp.Count > 0 ? "(" + string.Join(",", mp.Select(p => encodeTypeName(p.ParameterType))) + ")" : null;
+	private static string encodeGenericParameter(GenericParameter gp) => (gp.DeclaringType is null ? "``" : "`") + (gp.DeclaringType?.GenericParameters ?? gp.DeclaringMethod?.GenericParameters).Single(g => g.Name == gp.Name).Position;
 
-	private static string encodeMemberName(string mn) => mn.Replace('.', '#').Replace('<', '{').Replace('>', '}').Replace(',', '@');
-
-	private static string encodeTypeName(TypeReference tr)
+	private static IEnumerable<string> encodeMethodParams(ICollection<ParameterDefinition> mp)
 	{
-		string? suffix = null;
-
-		while (!tr.IsGenericInstance && !tr.IsFunctionPointer && tr is TypeSpecification ts)
+		if (mp.Count == 0)
 		{
-			if (tr.IsPointer)
-				suffix = "*" + suffix;
-			else if (tr.IsByReference)
-				suffix = "@" + suffix;
-			else if (tr.IsPinned)
-				suffix = "^" + suffix;
-			else if (tr is IModifierType mt && !ignoredModifiers.Contains(mt.ModifierType.FullName))
-				suffix = (tr.IsRequiredModifier ? "|" : "!") + mt.ModifierType.FullName + suffix;
-			else if (tr is ArrayType at)
-				suffix = "[" + string.Join(",", at.Dimensions.Select(d => d.IsSized ? d.LowerBound?.ToString() + ":" + d.UpperBound?.ToString() : null)) + "]" + suffix;
-
-			tr = ts.ElementType;
+			yield return string.Empty;
+			yield break;
 		}
 
-		if (tr.IsFunctionPointer)
+		var sl = emptyStringEnumerable;
+		foreach (var pl in mp.Select(p => encodeTypeName(p.ParameterType)))
+			sl = sl.SelectMany(s => pl.Select(p => s + "," + p));
+
+		foreach (var s in sl)
+			yield return "(" + s.Substring(1) + ")";
+	}
+
+	private static IEnumerable<string> encodeMemberName(string mn)
+	{
+		string en = mn.Replace('.', '#').Replace('<', '{').Replace('>', '}');
+		yield return en;
+
+		if (en.Contains(','))
+			yield return en.Replace(',', '@');
+	}
+
+	private static IEnumerable<string> encodeGenericInstance(GenericInstanceType gi, string? suffix)
+	{
+		var type = gi.ElementType;
+		var args = gi.GenericArguments;
+		int consumed = 0;
+
+		string name = null!;
+		while (true)
 		{
-			var fp = (FunctionPointerType)tr;
-			return "=FUNC:" + encodeTypeName(fp.ReturnType) + encodeMethodParams(fp.Parameters) + suffix;
-		}
-
-		if (tr.IsGenericParameter)
-		{
-			var gp = (GenericParameter)tr;
-			var gpi = (gp.DeclaringType?.GenericParameters ?? gp.DeclaringMethod?.GenericParameters).Single(g => g.Name == gp.Name);
-			return (gp.DeclaringType is null ? "``" : "`") + gpi.Position + suffix;
-		}
-
-		string typeName = tr.FullName.Replace('/', '.');
-
-		if (tr.IsGenericInstance)
-		{
-			var gi = (GenericInstanceType)tr;
-			typeName = typeName.Substring(0, typeName.IndexOf('`')) + "{" + string.Join(",", gi.GenericArguments.Select(ga => encodeTypeName(ga))) + "}";
-
-			while (tr.IsNested)
+			int idx = type.Name.LastIndexOf('`');
+			if (idx >= 0)
 			{
-				suffix = "." + tr.Name + suffix;
-				tr = tr.DeclaringType;
+				int cnt = int.Parse(type.Name.Substring(idx + 1));
+				name = "{" + string.Join(",", args.Skip(args.Count - consumed - cnt).Take(cnt).Select(ga => encodeTypeName(ga).First())) + "}" + name;
+				consumed += cnt;
 			}
+
+			name = (idx >= 0 ? type.Name.Substring(0, idx) : type.Name) + name;
+			if (!type.IsNested)
+			{
+				if (!string.IsNullOrEmpty(type.Namespace))
+					name = type.Namespace + "." + name;
+
+				break;
+			}
+
+			name = "." + name;
+			type = type.DeclaringType;
 		}
 
-		return typeName + suffix;
+		yield return name + suffix;
+	}
+
+	private static IEnumerable<string> encodeTypeName(TypeReference tr, string? suffix = null)
+	{
+		if (tr is GenericParameter gp)
+		{
+			yield return encodeGenericParameter(gp) + suffix;
+			yield break;
+		}
+
+		if (tr is not TypeSpecification ts)
+		{
+			// The only remaining special type we should be able to hit here is a nested type.  Rather than
+			// unwind that properly, we can just fix up the name (IL uses / separator, so replace with .).
+			yield return tr.FullName.Replace('/', '.') + suffix;
+			yield break;
+		}
+
+		var te = ts.ElementType;
+		foreach (var nm in ts switch {
+			{ IsPointer:     true } => encodeTypeName(te, "*" + suffix),
+			{ IsByReference: true } => encodeTypeName(te, "@" + suffix),
+			{ IsPinned:      true } => encodeTypeName(te, "^" + suffix),
+			ArrayType           at  => encodeTypeName(te, "[" + string.Join(",", at.Dimensions.Select(d => d.IsSized ? d.LowerBound?.ToString() + ":" + d.UpperBound?.ToString() : null)) + "]" + suffix),
+			IModifierType       mt  => encodeTypeName(te, suffix).Concat(encodeTypeName(te, (ts.IsRequiredModifier ? "|" : "!") + mt.ModifierType.FullName + suffix)),
+			FunctionPointerType fp  => encodeTypeName(fp.ReturnType).SelectMany(t => encodeMethodParams(fp.Parameters).Select(p => "=FUNC:" + t + p + suffix)),
+			GenericInstanceType gi  => encodeGenericInstance(gi, suffix),
+			_                       => encodeTypeName(te, suffix)
+		}) yield return nm;
 	}
 
 	internal sealed class RefAssemblyResolver : IAssemblyResolver

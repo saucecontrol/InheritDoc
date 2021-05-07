@@ -29,18 +29,19 @@ public class InheritDocTests
 	public static void InheritDocProcess(TestContext _)
 	{
 		string outPath = documentPath + ".after";
-		string outPathPrivateTrip = documentPath + ".privateTrim.after";
+		string outPathPrivateTrim = documentPath + ".privateTrim.after";
 
 		var log = new DebugLogger() as ILogger;
-		var res = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, log);
-		log.Write(ILogger.Severity.Message, $"replaced {res.Item1} of {res.Item2} and removed {res.Item3}");
+		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, log);
+		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
 
-		var resPrivateTrim = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrip, referencePaths, Array.Empty<string>(), ApiLevel.Private, log);
+		(replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrim, referencePaths, Array.Empty<string>(), ApiLevel.Private, log);
+		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
-		using var stmdocPrivateTrim = File.Open(outPathPrivateTrip, FileMode.Open);
+		using var stmdocPrivateTrim = File.Open(outPathPrivateTrim, FileMode.Open);
 		processedDocsPrivateTrim = XDocument.Load(stmdocPrivateTrim, LoadOptions.PreserveWhitespace).Root.Element("members");
 	}
 
@@ -56,6 +57,20 @@ public class InheritDocTests
 	{
 		var ele = getDocElement("M:" + B.M_ID_X, "summary");
 		Assert.AreEqual("Method X", ele?.Value);
+	}
+
+	[TestMethod]
+	public void NestedClassInherits()
+	{
+		var ele = getDocElement("T:" + B.T_ID_ND, "summary");
+		Assert.AreEqual("Class B.NC", ele?.Value);
+	}
+
+	[TestMethod]
+	public void PropertyWithParamInherits()
+	{
+		var ele = getDocElement("P:" + GG<string>.P_ID_this, "summary");
+		Assert.AreEqual("Property this[]", ele?.Value);
 	}
 
 	[TestMethod]
@@ -80,9 +95,16 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
+	public void NestedGenericParamsAssigned()
+	{
+		var ele = getDocElement("M:" + GIG<string>.M_ID_MImplicit, "summary");
+		Assert.AreEqual("Method M", ele?.Value);
+	}
+
+	[TestMethod]
 	public void MethodTypeParamRemapped()
 	{
-		var ele = getDocElement("M:" + GIG<string>.M_ID, "typeparam[@name='MT']");
+		var ele = getDocElement("M:" + GIG<string>.M_ID_MExplicit, "typeparam[@name='MT']");
 		Assert.AreEqual("TypeParam U", ele?.Value);
 	}
 
@@ -103,7 +125,7 @@ public class InheritDocTests
 	[TestMethod]
 	public void TypeParamRefRemapped()
 	{
-		var ele = getDocElement("M:" + GIG<string>.M_ID, "returns/typeparamref[@name='MT']");
+		var ele = getDocElement("M:" + GIG<string>.M_ID_MExplicit, "returns/typeparamref[@name='MT']");
 		Assert.IsNotNull(ele);
 	}
 
@@ -171,10 +193,24 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
+	public void ExplicitGenericInterfaceImplInherits()
+	{
+		var ele = getDocElement("M:" + D.M_ID_EqualsExplicit, "summary");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
 	public void MethodInheritsFromCref()
 	{
 		var ele = getDocElement("M:" + C.M_ID_M, "summary");
 		Assert.AreEqual("Gets the runtime type of the current instance.", ele?.Value);
+	}
+
+	[TestMethod]
+	public void MDArrayMethodParam()
+	{
+		var ele = getDocElement("M:" + C.M_ID_Y, "summary");
+		Assert.AreEqual("Method Y", ele?.Value);
 	}
 
 	[TestMethod]
@@ -220,14 +256,42 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
-	public void InternalClassImplementsInterface(){
-		var ele = getDocElement("M:ImplementsICollection.Add(System.String)", "summary");
+	public void MultiParamGenericExplicitProperty()
+	{
+		var ele = getDocElement("P:" + ImplementsIDictionary.P_ID_Keys, "summary");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void MultiParamGenericExplicitMethod()
+	{
+		var ele = getDocElement("M:" + ImplementsIDictionary.M_ID_Add, "summary");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void InternalClassImplementsInterfaceExplicit(){
+		var ele = getDocElement("M:" + ImplementsICollection.M_ID_ADD, "summary");
 		Assert.IsNull(ele);
 	}
 
 	[TestMethod]
-	public void InternalClassImplementsInterfacePrivateTrim(){
-		var ele = getDocElementPrivateTrim("M:ImplementsICollection.Add(System.String)", "summary");
+	public void InternalClassImplementsInterfaceImplicit()
+	{
+		var ele = getDocElement("M:" + ImplementsICollection.M_ID_CLEAR, "summary");
+		Assert.IsNull(ele);
+	}
+
+	[TestMethod]
+	public void InternalClassImplementsInterfaceExplicitPrivateTrim(){
+		var ele = getDocElementPrivateTrim("M:" + ImplementsICollection.M_ID_ADD, "summary");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void InternalClassImplementsInterfaceImplicitPrivateTrim()
+	{
+		var ele = getDocElementPrivateTrim("M:" + ImplementsICollection.M_ID_CLEAR, "summary");
 		Assert.IsNotNull(ele);
 	}
 

@@ -40,9 +40,9 @@ public class InheritDocTask : Task
 				Environment.NewLine + nameof(TrimLevel) + ": " + trim
 			);
 
-			var result = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, logger);
+			var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, logger);
 
-			logger.Write(ILogger.Severity.Message, $"{nameof(InheritDocTask)} replaced {result.Item1} of {result.Item2} inheritdoc tags {(trim > ApiLevel.None ? $"and removed {result.Item3} {(trim == ApiLevel.Private ? "private" : "non-public")} member docs " : null)}in {Path.GetFullPath(OutDocPath)}");
+			logger.Write(ILogger.Severity.Message, $"{nameof(InheritDocTask)} replaced {replaced} of {total} inheritdoc tags {(trim > ApiLevel.None ? $"and removed {trimmed} {(trim == ApiLevel.Private ? "private" : "non-public")} member docs " : null)}in {Path.GetFullPath(OutDocPath)}");
 			return true;
 		}
 		catch (Exception ex)

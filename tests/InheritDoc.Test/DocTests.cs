@@ -42,6 +42,14 @@ public interface IG<TG>
 	/// <param name="p">Param p</param>
 	/// <returns>Return <typeparamref name="U" />[]</returns>
 	unsafe U[] M<U>(U* p) where U : unmanaged;
+
+	/// <summary>Nested Interface IG&lt;TG&gt;.IN</summary>
+	public interface IN<TM>
+	{
+		/// <summary>Method M</summary>
+		/// <param name="p">Param p</param>
+		public void M(IN<TM> p);
+	}
 }
 
 /// <summary>Class G</summary>
@@ -53,9 +61,10 @@ public abstract class G<T> where T : class
 	/// <returns>Return <typeparamref name="T" /> <paramref name="t" /></returns>
 	public virtual T M(in T t) => default;
 
-	/// <summary>Property P</summary>
+	/// <summary>Property this[]</summary>
+	/// <param name="idx">Param idx</param>
 	/// <value>Value <typeparamref name="T" /></value>
-	public abstract T P { get; }
+	public abstract T this[int idx] { get; }
 }
 
 //
@@ -66,13 +75,15 @@ public abstract class G<T> where T : class
 public interface IY : IX
 {
 	/// <summary>Method Y</summary>
-	void Y();
+	/// <param name="p">Param p</param>
+	void Y(int[,] p);
 }
 
 /// <summary>Class B</summary>
 public class B : IY
 {
 	internal const string T_ID = nameof(B);
+	internal const string T_ID_ND = T_ID + "." + nameof(ND);
 	internal const string M_ID_X = T_ID + "." + nameof(IX) + "#" + nameof(IX.X);
 	internal const string M_ID_O = T_ID + "." + nameof(O) + "(" + nameof(System) + "." + nameof(String) + "[])";
 	internal const string M_ID_P = T_ID + "." + nameof(P);
@@ -80,7 +91,7 @@ public class B : IY
 	void IX.X() { }
 
 	/// <inheritdoc />
-	public virtual void Y() { }
+	public virtual void Y(int[,] p) { }
 
 	/// <summary>Overloaded Method O</summary>
 	/// <param name="s">Param s</param>
@@ -94,20 +105,26 @@ public class B : IY
 
 	/// <summary>Method P</summary>
 	protected internal void P() { }
+
+	/// <summary>Class B.NC</summary>
+	public class NC { }
+
+	/// <inheritdoc />
+	public class ND : NC { }
 }
 
 /// <inheritdoc />
 public class C : B, IZ
 {
 	internal new const string T_ID = nameof(C);
-	internal const string M_ID_Y = T_ID + "." + nameof(Y);
+	internal const string M_ID_Y = T_ID + "." + nameof(Y) + "(" + nameof(System) + "." + nameof(Int32) + "[0:,0:])";
 	internal const string M_ID_M = T_ID + "." + nameof(M) + "``1";
 	internal const string M_ID_N = T_ID + "." + nameof(N) + "(" + nameof(System) + "." + nameof(Int32) + ")";
 	internal const string P_ID = T_ID + "." + nameof(IZ) + "#" + nameof(IZ.P);
 	internal const string E_ID = T_ID + "." + nameof(IZ) + "#" + nameof(IZ.E);
 
 	/// <inheritdoc />
-	public override void Y() { }
+	public override void Y(int[,] q) { }
 
 	int IZ.P => default;
 
@@ -126,7 +143,7 @@ public class C : B, IZ
 public struct D : IEquatable<D>
 {
 	internal const string T_ID = nameof(D);
-	internal const string M_ID_EqualsExplcit = T_ID + "." + nameof(System) + "#" + nameof(IEquatable<D>) + "{" + nameof(D) + "}#" + nameof(Equals) + "(" + nameof(D) + ")";
+	internal const string M_ID_EqualsExplicit = T_ID + "." + nameof(System) + "#" + nameof(IEquatable<D>) + "{" + nameof(D) + "}#" + nameof(Equals) + "(" + nameof(D) + ")";
 	internal const string M_ID_EqualsOverride = T_ID + "." + nameof(Equals) + "(" + nameof(System) + "." + nameof(Object) + ")";
 
 	bool IEquatable<D>.Equals(D other) => default;
@@ -138,28 +155,27 @@ public struct D : IEquatable<D>
 /// <inheritdoc />
 public class GGI : GG<string>
 {
-	internal const string T_ID = nameof(GGI);
+	new internal const string T_ID = nameof(GGI);
 	internal const string M_ID = T_ID + "." + nameof(M) + "(" + nameof(System) + "." + nameof(String) + "@)";
-	internal const string P_ID = T_ID + "." + nameof(P);
 
 	/// <inheritdoc />
 	public GGI() { }
 
 	/// <inheritdoc />
 	public override string M(in string x) => default;
-
-	/// <inheritdoc />
-	public override string P => default;
 }
 
 /// <inheritdoc />
 public class GG<U> : G<U> where U : class
 {
+	internal const string T_ID = nameof(GG<U>) + "`1";
+	internal const string P_ID_this = T_ID + ".Item(" + nameof(System) + "." + nameof(Int32) + ")";
+
 	/// <summary>Constructor GG</summary>
 	public GG() { }
 
 	/// <inheritdoc />
-	public override U P => default;
+	public override U this[int i] => default;
 }
 
 /// <inheritdoc />
@@ -167,43 +183,51 @@ public class GI : G<string>
 {
 	internal const string T_ID = nameof(GI);
 	internal const string M_ID = T_ID + "." + nameof(M) + "(" + nameof(System) + "." + nameof(String) + "@)";
-	internal const string P_ID = T_ID + "." + nameof(P);
 
 	/// <inheritdoc />
 	public override string M(in string s) => default;
 
 	/// <inheritdoc />
-	public override string P => default;
+	public override string this[int i] => default;
 }
 
 /// <inheritdoc />
-public class GX<U> : Lazy<U>
+public class GX<U> : Lazy<U>, IEquatable<Lazy<U>>
 {
 	internal const string T_ID = nameof(GX<U>) + "`1";
 	internal const string M_ID_GetHashCode = T_ID + "." + nameof(GetHashCode);
+	internal const string M_ID_Equals = T_ID + "." + nameof(Equals) + "(" + nameof(System) + "." + nameof(Lazy<U>) + "{`0})";
 
 	/// <inheritdoc />
 	public override int GetHashCode() => default;
+
+	/// <inheritdoc />
+	public bool Equals(Lazy<U> other) => default;
 }
 
 /// <inheritdoc />
 public class GXI : Lazy<string>, IEquatable<string>
 {
 	internal const string T_ID = nameof(GXI);
+	internal const string M_ID_Equals = T_ID + "." + nameof(Equals) + "(" + nameof(System) + "." + nameof(String) + ")";
 
 	/// <inheritdoc />
 	public bool Equals(string other) => default;
 }
 
 /// <inheritdoc />
-public class GIG<TT> : GG<TT>, IG<TT> where TT : class
+public class GIG<TT> : GG<TT>, IG<TT>, IG<TT>.IN<TT> where TT : class
 {
-	internal const string T_ID = nameof(GIG<TT>) + "`1";
-	internal const string M_ID = T_ID + "." + nameof(IG<TT>) + "{" + nameof(TT) + "}#" + nameof(IG<TT>.M) + "``1(``0*)";
+	new internal const string T_ID = nameof(GIG<TT>) + "`1";
+	internal const string M_ID_MImplicit = T_ID + "." + nameof(M) + "(" + nameof(IG<TT>) + "{`0}." + nameof(IG<TT>.IN<TT>) + "{`0})";
+	internal const string M_ID_MExplicit = T_ID + "." + nameof(IG<TT>) + "{" + nameof(TT) + "}#" + nameof(IG<TT>.M) + "``1(``0*)";
 	internal const string M_ID_ctor = T_ID + ".#ctor";
 
 	/// <inheritdoc />
 	public GIG() { }
+
+	/// <inheritdoc />
+	public void M(IG<TT>.IN<TT> q) { }
 
 	unsafe MT[] IG<TT>.M<MT>(MT* mtp) => default;
 }
@@ -211,7 +235,7 @@ public class GIG<TT> : GG<TT>, IG<TT> where TT : class
 /// <inheritdoc cref="IG{TG}" />
 public class GIS<TT> : GG<TT>, IG<TT> where TT : class
 {
-	internal const string T_ID = nameof(GIS<TT>) + "`1";
+	new internal const string T_ID = nameof(GIS<TT>) + "`1";
 	internal const string M_ID = T_ID + "." + nameof(M) + "``1(``0*)";
 
 	/// <inheritdoc />
@@ -243,25 +267,58 @@ public class W
 	public void NotInherited() { }
 }
 
+//
+// Tricky Generic Case
+//
+
+/// <inheritdoc />
+public class ImplementsIDictionary : IDictionary<string, string>
+{
+	internal const string T_ID = nameof(ImplementsIDictionary);
+	internal const string P_ID_Keys = T_ID + ".System#Collections#Generic#IDictionary{System#String,System#String}#Keys";
+	internal const string M_ID_Add = T_ID + ".System#Collections#Generic#IDictionary{System#String,System#String}#Add(System.String,System.String)";
+
+	string IDictionary<string, string>.this[string key] { get => default; set => _ = value; }
+	ICollection<string> IDictionary<string, string>.Keys => default;
+	ICollection<string> IDictionary<string, string>.Values => default;
+	int ICollection<KeyValuePair<string, string>>.Count => default;
+	bool ICollection<KeyValuePair<string, string>>.IsReadOnly => default;
+
+	void IDictionary<string, string>.Add(string key, string value) { }
+	void ICollection<KeyValuePair<string, string>>.Add(KeyValuePair<string, string> item) { }
+	void ICollection<KeyValuePair<string, string>>.Clear() { }
+	bool ICollection<KeyValuePair<string, string>>.Contains(KeyValuePair<string, string> item) => default;
+	bool IDictionary<string, string>.ContainsKey(string key) => default;
+	void ICollection<KeyValuePair<string, string>>.CopyTo(KeyValuePair<string, string>[] array, int arrayIndex) { }
+	IEnumerator<KeyValuePair<string, string>> IEnumerable<KeyValuePair<string, string>>.GetEnumerator() => default;
+	IEnumerator IEnumerable.GetEnumerator() => default;
+	bool IDictionary<string, string>.Remove(string key) => default;
+	bool ICollection<KeyValuePair<string, string>>.Remove(KeyValuePair<string, string> item) => default;
+	bool IDictionary<string, string>.TryGetValue(string key, out string value) => throw new NotImplementedException();
+}
+
+//
+// Internal Type
+//
+
 internal class ImplementsICollection : ICollection<string>
 {
+	internal const string T_ID = nameof(ImplementsICollection);
+	internal const string I_ID = nameof(System) + "#" + nameof(System.Collections) + "#" + nameof(System.Collections.Generic) + "#" + nameof(ICollection<string>) + "{" + nameof(System) + "#" + nameof(String) + "}";
+	internal const string M_ID_ADD = T_ID + "." + nameof(Add) + "(" + nameof(System) + "." + nameof(String) + ")";
+	internal const string M_ID_CLEAR = T_ID + "." + I_ID + "#" + nameof(ICollection<string>.Clear);
+
+	int ICollection<string>.Count => default;
+	bool ICollection<string>.IsReadOnly => default;
+
 	/// <inheritdoc />
-	int ICollection<string>.Count => throw new NotImplementedException();
+	public void Add(string item) { }
 
-	bool ICollection<string>.IsReadOnly => throw new NotImplementedException();
+	void ICollection<string>.Clear() { }
+	bool ICollection<string>.Contains(string item) => default;
+	void ICollection<string>.CopyTo(string[] array, int arrayIndex) { }
+	bool ICollection<string>.Remove(string item) => default;
 
-	/// <inheritdoc />
-	public void Add(string item) => throw new NotImplementedException();
-
-	void ICollection<string>.Clear() => throw new NotImplementedException();
-
-	bool ICollection<string>.Contains(string item) => throw new NotImplementedException();
-
-	void ICollection<string>.CopyTo(string[] array, int arrayIndex) => throw new NotImplementedException();
-
-	IEnumerator<string> IEnumerable<string>.GetEnumerator() => throw new NotImplementedException();
-
-	IEnumerator IEnumerable.GetEnumerator() => throw new NotImplementedException();
-
-	bool ICollection<string>.Remove(string item) => throw new NotImplementedException();
+	IEnumerator<string> IEnumerable<string>.GetEnumerator() => default;
+	IEnumerator IEnumerable.GetEnumerator() => default;
 }

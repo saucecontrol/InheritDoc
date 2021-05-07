@@ -60,7 +60,7 @@ internal class InheritDocProcessor
 	private static readonly string refFolderToken = Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar;
 	private static readonly string libFolderToken = Path.DirectorySeparatorChar + "lib" + Path.DirectorySeparatorChar;
 
-	public static Tuple<int, int, int> InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ApiLevel trimLevel, ILogger logger)
+	public static (int replaced, int total, int trimmed) InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ApiLevel trimLevel, ILogger logger)
 	{
 		static bool isInheritDocCandidate(XElement m) =>
 			!string.IsNullOrEmpty((string)m.Attribute(DocAttributeNames.Name)) && !m.HasAttribute(DocAttributeNames._visited) && m.Descendants(DocElementNames.InheritDoc).Any();
@@ -77,7 +77,7 @@ internal class InheritDocProcessor
 		int trimCount = 0;
 
 		if (beforeCount == 0 && trimLevel == ApiLevel.None)
-			return Tuple.Create(0, 0, 0);
+			return (0, 0, 0);
 
 		using var resolver = CecilExtensions.RefAssemblyResolver.Create(asmPath, refPaths);
 		using var asm = AssemblyDefinition.ReadAssembly(asmPath, new ReaderParameters { AssemblyResolver = resolver });
@@ -128,7 +128,7 @@ internal class InheritDocProcessor
 		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
 		doc.Save(writer);
 
-		return Tuple.Create(beforeCount - afterCount, beforeCount, trimCount);
+		return (beforeCount - afterCount, beforeCount, trimCount);
 	}
 
 	private static IDictionary<string, IEnumerable<DocMatch>> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ApiLevel trimLevel, ILogger logger)
@@ -180,9 +180,8 @@ internal class InheritDocProcessor
 					dml.Add(new DocMatch(cref, t));
 			}
 
-			foreach (var m in t.Methods.Where(m => !m.IsCompilerGenerated() || m.IsEventMethod() || m.IsPropertyMethod()))
+			foreach (var (m, idx, memID) in t.Methods.Where(m => !m.IsCompilerGenerated() || m.IsEventMethod() || m.IsPropertyMethod()).SelectMany(m => m.GetDocID().Select((d, i) => (m, i, d))))
 			{
-				string memID = m.GetDocID();
 				if (docMap.ContainsKey(memID))
 					continue;
 
@@ -190,7 +189,7 @@ internal class InheritDocProcessor
 
 				// If no docs for public explicit interface implementation, inject them
 				// including the whitespace they would have had if they had been there.
-				if ((om?.DeclaringType.GetApiLevel() ?? ApiLevel.None) == ApiLevel.Public && t.GetApiLevel() > trimLevel && !findDocsByID(docMembers, memID).Any())
+				if (idx == 0 && (om?.DeclaringType.GetApiLevel() ?? ApiLevel.None) > trimLevel && t.GetApiLevel() > trimLevel && !findDocsByID(docMembers, memID).Any())
 					docMembers.Add(
 						new XText("    "),
 							new XElement(DocElementNames.Member,
@@ -215,10 +214,8 @@ internal class InheritDocProcessor
 					var dml = new List<DocMatch>();
 
 					var bases = om is not null ? (new[] { om }).Concat(m.GetBaseCandidates()) : m.GetBaseCandidates();
-					foreach (var bm in bases)
+					foreach (var (bm, cref) in bases.SelectMany(bm => bm.GetDocID().Select(d => (bm, d))))
 					{
-						string cref = bm.GetDocID();
-
 						if (dml.Count == 0 || crefs.Contains(cref))
 							dml.Add(new DocMatch(cref, m, bm));
 
@@ -236,7 +233,7 @@ internal class InheritDocProcessor
 				}
 			}
 
-			foreach (var fd in t.Fields.Where(f => f.GetApiLevel() <= trimLevel).SelectMany(f => findDocsByID(docMembers, f.GetDocID())))
+			foreach (var fd in t.Fields.Where(f => f.GetApiLevel() <= trimLevel).SelectMany(f => f.GetDocID().SelectMany(d => findDocsByID(docMembers, d))))
 				fd.SetAttributeValue(DocAttributeNames._trimmed, true);
 		}
 

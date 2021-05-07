@@ -4,6 +4,9 @@ trigger:
 pool:
   vmImage: windows-latest
 
+variables:
+  disable.coverage.autogenerate: true
+
 name: $(Year:yy)$(DayOfYear)$(Rev:r)
 steps:
 - task: UseDotNet@2
@@ -15,8 +18,15 @@ steps:
 - script: dotnet build src\InheritDoc -c Dist --version-suffix ci$(Build.BuildNumber)
   displayName: Build
 
-- script: dotnet test tests\InheritDoc.Test -c Coverage -s tests\runsettings --logger trx
+- script: dotnet test tests\InheritDoc.Test -c Coverage -s tests\runsettings --logger trx --collect "XPlat Code Coverage"
   displayName: Test
+
+- task: Palmmedia.reportgenerator.reportgenerator-build-release-task.reportgenerator@4
+  displayName: Coverage Reports
+  inputs:
+    reports: out\coverage\opencover*.xml
+    targetdir: out\coverage\reports
+    reporttypes: HtmlInline_AzurePipelines;Cobertura;Badges
 
 - task: NuGetAuthenticate@0
   condition: ne(variables['Build.Reason'], 'PullRequest')
@@ -29,3 +39,9 @@ steps:
   inputs:
     testRunner: VSTest
     testResultsFiles: out\testresults\*.trx
+
+- task: PublishCodeCoverageResults@1
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: out\coverage\reports\cobertura.xml
+    reportDirectory: out\coverage\reports
