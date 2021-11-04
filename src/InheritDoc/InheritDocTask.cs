@@ -4,6 +4,7 @@ using System.Collections.Generic;
 
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
+using System.Globalization;
 
 public class InheritDocTask : Task
 {
@@ -20,6 +21,7 @@ public class InheritDocTask : Task
 	public string? AdditionalDocPaths { get; set; }
 	public string? NoWarn { get; set; }
 	public string? TrimLevel { get; set; }
+	public string? Language { get; set; }
 
 	public override bool Execute()
 	{
@@ -29,6 +31,9 @@ public class InheritDocTask : Task
 			var addPaths = AdditionalDocPaths?.Split(';') ?? Array.Empty<string>();
 			var logger = new TaskLogger(Log, NoWarn?.Split(';') ?? Array.Empty<string>()) as ILogger;
 			var trim = (ApiLevel)Math.Min((int)(Enum.TryParse<ApiLevel>(TrimLevel, true, out var t) ? t : ApiLevel.Internal), (int)ApiLevel.Internal);
+			var language = string.IsNullOrWhiteSpace(Language) ? null : new CultureInfo(Language);
+
+			System.Diagnostics.Debugger.Launch();
 
 			Log.LogCommandLine(MessageImportance.Normal,
 				typeof(InheritDocTask).Assembly.GetName().FullName +
@@ -37,10 +42,11 @@ public class InheritDocTask : Task
 				Environment.NewLine + nameof(OutDocPath) + ": " + OutDocPath +
 				Environment.NewLine + nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths +
 				Environment.NewLine + nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths +
-				Environment.NewLine + nameof(TrimLevel) + ": " + trim
+				Environment.NewLine + nameof(TrimLevel) + ": " + trim +
+				Environment.NewLine + nameof(Language) + ": " + language
 			);
 
-			var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, logger);
+			var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, language, logger);
 
 			logger.Write(ILogger.Severity.Message, $"{nameof(InheritDocTask)} replaced {replaced} of {total} inheritdoc tags {(trim > ApiLevel.None ? $"and removed {trimmed} {(trim == ApiLevel.Private ? "private" : "non-public")} member docs " : null)}in {Path.GetFullPath(OutDocPath)}");
 			return true;

@@ -9,6 +9,7 @@ using System.Security;
 using System.Collections.Generic;
 
 using Mono.Cecil;
+using System.Globalization;
 
 public enum ApiLevel { None, Private, Internal, Public }
 
@@ -60,7 +61,7 @@ internal class InheritDocProcessor
 	private static readonly string refFolderToken = Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar;
 	private static readonly string libFolderToken = Path.DirectorySeparatorChar + "lib" + Path.DirectorySeparatorChar;
 
-	public static (int replaced, int total, int trimmed) InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ApiLevel trimLevel, ILogger logger)
+	public static (int replaced, int total, int trimmed) InheritDocs(string asmPath, string docPath, string outPath, string[] refPaths, string[] addPaths, ApiLevel trimLevel, CultureInfo? language, ILogger logger)
 	{
 		static bool isInheritDocCandidate(XElement m) =>
 			!string.IsNullOrEmpty((string)m.Attribute(DocAttributeNames.Name)) && !m.HasAttribute(DocAttributeNames._visited) && m.Descendants(DocElementNames.InheritDoc).Any();
@@ -94,7 +95,7 @@ internal class InheritDocProcessor
 		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
 
 		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
-		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
+		var refDocs = getRefDocs(refPaths, addPaths, refCref, language, logger);
 		logger.Write(ILogger.Severity.Diag, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
 
 		if (trimLevel > ApiLevel.None)
@@ -367,20 +368,56 @@ internal class InheritDocProcessor
 			inh.ReplaceWith(nodes);
 	}
 
-	static XDocument getRefDocs(IReadOnlyCollection<string> refAssemblies, IReadOnlyCollection<string> refDocs, IReadOnlyCollection<string> refCref, ILogger logger)
+
+	static (bool, string) TryGetXmlFileForAssembly(string path, CultureInfo? language)
+	{
+		if (language != null)
+		{
+			string directoryPath = Path.GetDirectoryName(path)!;
+			string altFileName = Path.ChangeExtension(Path.GetFileName(path), ".xml");
+			return TryGetLocalizedXmlFile(directoryPath, altFileName, language);
+		}
+		return (false, Path.ChangeExtension(path, ".xml"));
+	}
+
+	static (bool, string) TryGetLocalizedXmlFile(string dirPath, string fileName, CultureInfo? language)
+	{
+		if (language != null)
+		{
+			string culturePath = Path.Combine(dirPath, language.Name, fileName);
+			if (File.Exists(culturePath))
+			{
+				return (true, culturePath);
+			}
+			//sometimes language provided is more specific than TwoLetterISOLanguageName e.g. en-US, fall back to en when the specific version is not found
+			if (language.Name != language.TwoLetterISOLanguageName)
+			{
+				culturePath = Path.Combine(dirPath, language.TwoLetterISOLanguageName, fileName);
+				if (File.Exists(culturePath))
+				{
+					return (true, culturePath);
+				}
+			}
+		}
+		return (false, Path.Combine(dirPath, fileName));
+	}
+
+
+
+	static XDocument getRefDocs(IReadOnlyCollection<string> refAssemblies, IReadOnlyCollection<string> refDocs, IReadOnlyCollection<string> refCref, CultureInfo? language, ILogger logger)
 	{
 		var doc = new XDocument(new XElement(DocElementNames.Doc));
 		if (refCref.Count == 0)
 			return doc;
 
 		var docPaths = refAssemblies
-			.Select(path => Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + ".xml"))
-			.Concat(refAssemblies.Select(p => Path.GetDirectoryName(p)).Distinct().Select(p => Path.Combine(p!, "namespaces.xml"))
-			.Concat(refDocs));
+			.Select(a=>TryGetXmlFileForAssembly(a,language))
+			.Concat(refAssemblies.Select(p => Path.GetDirectoryName(p)).Distinct().Select(p => TryGetLocalizedXmlFile(p!, "namespaces.xml", language))
+			.Concat(refDocs.Select(d=>(true,d))));
 
-		foreach (string docPath in docPaths)
+		foreach ((bool Prio,string Path) docPath in docPaths)
 		{
-			string path = Path.GetFullPath(docPath);
+			string path = Path.GetFullPath(docPath.Path);
 			logger.Write(ILogger.Severity.Diag, "Trying ref doc path: " + path);
 
 			if (!File.Exists(path))
@@ -411,7 +448,10 @@ internal class InheritDocProcessor
 					}
 
 					if (refCref.Contains(xrd.GetAttribute(DocAttributeNames.Name.LocalName)))
-						doc.Root.Add(XNode.ReadFrom(xrd));
+						if (docPath.Prio)
+							doc.Root.AddFirst(XNode.ReadFrom(xrd));
+						else
+							doc.Root.Add(XNode.ReadFrom(xrd));
 					else
 						xrd.Skip();
 				}

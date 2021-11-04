@@ -32,13 +32,13 @@ public class InheritDocTests
 		string outPathPrivateTrim = documentPath + ".privateTrim.after";
 
 		var log = new DebugLogger() as ILogger;
-		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, log);
+		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, null, log);
 		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
 
-		(replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrim, referencePaths, Array.Empty<string>(), ApiLevel.Private, log);
+		(replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrim, referencePaths, Array.Empty<string>(), ApiLevel.Private, null, log);
 		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
 		using var stmdocPrivateTrim = File.Open(outPathPrivateTrim, FileMode.Open);
