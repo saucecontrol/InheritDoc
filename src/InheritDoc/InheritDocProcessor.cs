@@ -95,7 +95,7 @@ internal class InheritDocProcessor
 		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
 
 		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
-		var refDocs = getRefDocs(refPaths, addPaths, refCref, language, logger);
+		var refDocs = GetRefDocs(refPaths, addPaths, refCref, language, logger);
 		logger.Write(ILogger.Severity.Diag, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
 
 		if (trimLevel > ApiLevel.None)
@@ -368,69 +368,97 @@ internal class InheritDocProcessor
 			inh.ReplaceWith(nodes);
 	}
 
-
-	static (bool, string) TryGetXmlFileForAssembly(string path, CultureInfo? language)
+	static bool TryGetLocalizedXmlFile(ref string path, CultureInfo language, ILogger logger)
 	{
-		if (language != null)
+		string dirPath = Path.GetDirectoryName(path)!;
+		string fileName = Path.GetFileName(path);
+		string culturePath = Path.Combine(dirPath, language.Name, fileName);
+		if (CheckAltPathes(ref culturePath, logger))
 		{
-			string directoryPath = Path.GetDirectoryName(path)!;
-			string altFileName = Path.ChangeExtension(Path.GetFileName(path), ".xml");
-			return TryGetLocalizedXmlFile(directoryPath, altFileName, language);
+			path = culturePath;
+			return true;
 		}
-		return (false, Path.ChangeExtension(path, ".xml"));
-	}
-
-	static (bool, string) TryGetLocalizedXmlFile(string dirPath, string fileName, CultureInfo? language)
-	{
-		if (language != null)
+		//sometimes language provided is more specific than TwoLetterISOLanguageName e.g. en-US, fall back to en when the specific version is not found
+		if (language.Name != language.TwoLetterISOLanguageName)
 		{
-			string culturePath = Path.Combine(dirPath, language.Name, fileName);
-			if (File.Exists(culturePath))
+			culturePath = Path.Combine(dirPath, language.TwoLetterISOLanguageName, fileName);
+			if (CheckAltPathes(ref culturePath, logger))
 			{
-				return (true, culturePath);
-			}
-			//sometimes language provided is more specific than TwoLetterISOLanguageName e.g. en-US, fall back to en when the specific version is not found
-			if (language.Name != language.TwoLetterISOLanguageName)
-			{
-				culturePath = Path.Combine(dirPath, language.TwoLetterISOLanguageName, fileName);
-				if (File.Exists(culturePath))
-				{
-					return (true, culturePath);
-				}
+				path = culturePath;
+				return true;
 			}
 		}
-		return (false, Path.Combine(dirPath, fileName));
+		return false;
+	}
+
+	static bool CheckAltPathes(ref string path, ILogger logger)
+	{
+		if (!File.Exists(path))
+		{
+			string oldPath=path;
+			// Some NuGet packages have XML docs in the "lib" folder but not in the "ref" folder or vice-versa.
+			if (path.Contains(refFolderToken) && File.Exists(path.Replace(refFolderToken, libFolderToken)))
+				path = path.Replace(refFolderToken, libFolderToken);
+			else if (path.Contains(libFolderToken) && File.Exists(path.Replace(libFolderToken, refFolderToken)))
+				path = path.Replace(libFolderToken, refFolderToken);
+			else
+			{
+				return false;
+			}
+
+			logger.Write(ILogger.Severity.Info, "Using alt ref doc path: " + oldPath + " -> " + path);
+			return true;
+		}
+		return true;
 	}
 
 
-
-	static XDocument getRefDocs(IReadOnlyCollection<string> refAssemblies, IReadOnlyCollection<string> refDocs, IReadOnlyCollection<string> refCref, CultureInfo? language, ILogger logger)
+	static XDocument GetRefDocs(IReadOnlyCollection<string> refAssemblies, IReadOnlyCollection<string> refDocs, IReadOnlyCollection<string> refCref, CultureInfo? language, ILogger logger)
 	{
 		var doc = new XDocument(new XElement(DocElementNames.Doc));
 		if (refCref.Count == 0)
 			return doc;
 
-		var docPaths = refAssemblies
-			.Select(a=>TryGetXmlFileForAssembly(a,language))
-			.Concat(refAssemblies.Select(p => Path.GetDirectoryName(p)).Distinct().Select(p => TryGetLocalizedXmlFile(p!, "namespaces.xml", language))
-			.Concat(refDocs.Select(d=>(true,d))));
+		var refAssemblyXmls = refAssemblies
+			.Select(a => Path.ChangeExtension(a, ".xml"))
+			.Concat(refAssemblies.Select(p => Path.GetDirectoryName(p)).Distinct().Select(p => Path.Combine(p!, "namespaces.xml")));
+		FillRefDocs(refAssemblyXmls, false, refCref, language, logger, doc);
+		
+		//prioritize explicitly submitted docs
+		FillRefDocs(refDocs, true, refCref, language, logger, doc);
 
-		foreach ((bool Prio,string Path) docPath in docPaths)
+		return doc;
+	}
+
+	static void FillRefDocs(IEnumerable<string> docPaths, bool prio, IReadOnlyCollection<string> refCref, CultureInfo? language, ILogger logger, XDocument doc)
+	{
+		foreach (string docPath in docPaths)
 		{
-			string path = Path.GetFullPath(docPath.Path);
+			string path = Path.GetFullPath(docPath);
 			logger.Write(ILogger.Severity.Diag, "Trying ref doc path: " + path);
+			bool docPathPrio;
 
-			if (!File.Exists(path))
+			if (prio)//explicit provided file, do not check for alternativ paths
 			{
-				// Some NuGet packages have XML docs in the "lib" folder but not in the "ref" folder or vice-versa.
-				if (path.Contains(refFolderToken) && File.Exists(path.Replace(refFolderToken, libFolderToken)))
-					path = path.Replace(refFolderToken, libFolderToken);
-				else if (path.Contains(libFolderToken) && File.Exists(path.Replace(libFolderToken, refFolderToken)))
-					path = path.Replace(libFolderToken, refFolderToken);
-				else
+				if (!File.Exists(path))
+				{
+					//maybe log error?
 					continue;
-
-				logger.Write(ILogger.Severity.Info, "Using alt ref doc path: " + docPath + " -> " + path);
+				}
+				docPathPrio = true;
+			}
+			else if (language != null && TryGetLocalizedXmlFile(ref path, language, logger))
+			{
+				//prioritize localized files over non localized
+				docPathPrio = true;
+			}
+			else if (!CheckAltPathes(ref path, logger))
+			{
+				continue;
+			}
+			else
+			{
+				docPathPrio = false;
 			}
 
 			using var xrd = getDocReader(path, logger);
@@ -448,7 +476,7 @@ internal class InheritDocProcessor
 					}
 
 					if (refCref.Contains(xrd.GetAttribute(DocAttributeNames.Name.LocalName)))
-						if (docPath.Prio)
+						if (docPathPrio)//add prioritized first so they are found first later
 							doc.Root.AddFirst(XNode.ReadFrom(xrd));
 						else
 							doc.Root.Add(XNode.ReadFrom(xrd));
@@ -461,8 +489,6 @@ internal class InheritDocProcessor
 				logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in referenced doc: " + ex.Message);
 			}
 		}
-
-		return doc;
 	}
 
 	private static XmlReader? getDocReader(string docPath, ILogger logger)

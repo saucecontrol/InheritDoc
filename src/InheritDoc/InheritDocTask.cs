@@ -33,8 +33,6 @@ public class InheritDocTask : Task
 			var trim = (ApiLevel)Math.Min((int)(Enum.TryParse<ApiLevel>(TrimLevel, true, out var t) ? t : ApiLevel.Internal), (int)ApiLevel.Internal);
 			var language = string.IsNullOrWhiteSpace(Language) ? null : new CultureInfo(Language);
 
-			System.Diagnostics.Debugger.Launch();
-
 			Log.LogCommandLine(MessageImportance.Normal,
 				typeof(InheritDocTask).Assembly.GetName().FullName +
 				Environment.NewLine + nameof(AssemblyPath) + ": " + AssemblyPath +
