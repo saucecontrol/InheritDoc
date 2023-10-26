@@ -35,6 +35,7 @@ internal class InheritDocProcessor
 	{
 		public static readonly XName _visited = XName.Get(nameof(_visited));
 		public static readonly XName _trimmed = XName.Get(nameof(_trimmed));
+		public static readonly XName _gencode = XName.Get(nameof(_gencode));
 		public static readonly XName Cref = XName.Get("cref");
 		public static readonly XName Name = XName.Get("name");
 		public static readonly XName Path = XName.Get("path");
@@ -89,7 +90,6 @@ internal class InheritDocProcessor
 			asm.Modules
 			.SelectMany(m => m.Types)
 			.SelectManyRecursive(t => t.NestedTypes)
-			.Where(t => !t.IsCompilerGenerated() || t.IsNamespaceDocPlaceholder())
 			.ToList()
 		;
 
@@ -107,8 +107,14 @@ internal class InheritDocProcessor
 		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(isInheritDocCandidate)) is not null)
 			replaceInheritDoc(docPath, mem, docMap, docMembers, refDocs, logger);
 
-		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
-			md.SetAttributeValue(DocAttributeNames._visited, null);
+		foreach (var md in docMembers.Elements(DocElementNames.Member))
+		{
+			if (md.HasAttribute(DocAttributeNames._visited))
+				md.SetAttributeValue(DocAttributeNames._visited, null);
+
+			if (md.HasAttribute(DocAttributeNames._gencode))
+				md.SetAttributeValue(DocAttributeNames._gencode, null);
+		}
 
 		if (trimLevel > ApiLevel.None)
 		{
@@ -143,14 +149,20 @@ internal class InheritDocProcessor
 			string typeID = t.GetDocID();
 			var memDocs = findDocsByID(docMembers, typeID);
 
-			// Several tools include this hack to output namespace documentation
-			// https://stackoverflow.com/questions/793210/xml-documentation-for-a-namespace
-			if (t.IsCompilerGenerated() && t.IsNamespaceDocPlaceholder())
+			if (t.IsGeneratedCode())
 			{
-				foreach (var md in memDocs)
-					md.SetAttributeValue(DocAttributeNames.Name, "N:" + t.Namespace);
+				// Several tools include this hack to output namespace documentation
+				// https://stackoverflow.com/questions/793210/xml-documentation-for-a-namespace
+				if (t.IsNamespaceDocPlaceholder())
+				{
+					foreach (var md in memDocs)
+						md.SetAttributeValue(DocAttributeNames.Name, "N:" + t.Namespace);
 
-				continue;
+					continue;
+				}
+
+				foreach (var md in memDocs)
+					md.SetAttributeValue(DocAttributeNames._gencode, true);
 			}
 
 			if (t.GetApiLevel() <= trimLevel)
@@ -183,7 +195,7 @@ internal class InheritDocProcessor
 					dml.Add(new DocMatch(cref, t));
 			}
 
-			foreach (var (m, idx, memID) in t.Methods.Where(m => !m.IsCompilerGenerated() || m.IsEventMethod() || m.IsPropertyMethod()).SelectMany(m => m.GetDocID().Select((d, i) => (m, i, d))))
+			foreach (var (m, idx, memID) in t.Methods.SelectMany(m => m.GetDocID().Select((d, i) => (m, i, d))))
 			{
 				if (docMap.ContainsKey(memID))
 					continue;
@@ -207,6 +219,12 @@ internal class InheritDocProcessor
 				{
 					foreach (var md in methDocs)
 						md.SetAttributeValue(DocAttributeNames._trimmed, true);
+				}
+
+				if (m.IsGeneratedCode())
+				{
+					foreach (var md in methDocs)
+						md.SetAttributeValue(DocAttributeNames._gencode, true);
 				}
 
 				if (methDocs.Descendants(DocElementNames.InheritDoc).Any())
@@ -257,7 +275,7 @@ internal class InheritDocProcessor
 			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dml?.FirstOrDefault()?.Cref;
 			if (string.IsNullOrEmpty(cref))
 			{
-				if (!mem.HasAttribute(DocAttributeNames._trimmed))
+				if (!mem.HasAttribute(DocAttributeNames._trimmed) && !mem.HasAttribute(DocAttributeNames._gencode))
 					logger.Warn(ErrorCodes.NoBase, file, mem.SourceLine(), mem.SourceColumn(), "Cref not present and no base could be found for: " + memID);
 
 				continue;
@@ -275,7 +293,7 @@ internal class InheritDocProcessor
 			doc = findDocsByID(members, cref!).FirstOrDefault();
 			if (doc is null)
 			{
-				if (!mem.HasAttribute(DocAttributeNames._trimmed))
+				if (!mem.HasAttribute(DocAttributeNames._trimmed) && !mem.HasAttribute(DocAttributeNames._gencode))
 					logger.Warn(ErrorCodes.NoDocs, file, mem.SourceLine(), mem.SourceColumn(), "No matching documentation could be found for: " + memID + ", which attempts to inherit from: " + cref);
 
 				continue;
@@ -364,7 +382,7 @@ internal class InheritDocProcessor
 		if (nodes.Count > 0 && nodes[0].IsWhiteSpace())
 			nodes.RemoveAt(0);
 
-		if (nodes.Count == 0 && !inh.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed)))
+		if (nodes.Count == 0 && !inh.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed) || m.HasAttribute(DocAttributeNames._gencode)))
 			logger.Warn(ErrorCodes.NoNode, file, inh.SourceLine(), inh.SourceColumn(), "No matching non-duplicate nodes found for: " + memID + ", which attempts to inherit from: " + dm.Cref + " path=\"" + xpath + "\"");
 		else
 			inh.ReplaceWith(nodes);

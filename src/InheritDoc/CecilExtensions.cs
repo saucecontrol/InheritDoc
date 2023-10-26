@@ -8,7 +8,11 @@ using Mono.Cecil;
 
 internal static class CecilExtensions
 {
-	private const string compilerGeneratedAttribute = "System.Runtime.CompilerServices.CompilerGeneratedAttribute";
+	private static readonly string[] generatedCodeAttributes = [
+		"System.CodeDom.Compiler.GeneratedCodeAttribute",
+		"System.Diagnostics.DebuggerNonUserCodeAttribute",
+		"System.Runtime.CompilerServices.CompilerGeneratedAttribute"
+	];
 
 	// These are ignored as the base for types, defaulting the doc inheritance target to an implemented interface instead.
 	private static readonly string[] ignoredBaseTypes = [
@@ -66,9 +70,25 @@ internal static class CecilExtensions
 		return docID;
 	}
 
-	public static bool IsCompilerGenerated(this TypeDefinition t) => (t.HasCustomAttributes && t.CustomAttributes.Any(a => a.AttributeType.FullName == compilerGeneratedAttribute)) || (t.IsNested && t.DeclaringType.IsCompilerGenerated());
+	public static bool IsGeneratedCode(this TypeDefinition t) => (t.HasCustomAttributes && t.CustomAttributes.Any(a => generatedCodeAttributes.Contains(a.AttributeType.FullName))) || (t.IsNested && t.DeclaringType.IsGeneratedCode());
 
-	public static bool IsCompilerGenerated(this MethodDefinition m) => m.HasCustomAttributes && m.CustomAttributes.Any(a => a.AttributeType.FullName == compilerGeneratedAttribute);
+	public static bool IsGeneratedCode(this MethodDefinition m)
+	{
+		if (m.HasCustomAttributes && m.CustomAttributes.Any(a => generatedCodeAttributes.Contains(a.AttributeType.FullName)))
+			return true;
+
+		if (m.IsPropertyMethod())
+			return getPropertyForMethod(m).IsGeneratedCode();
+
+		if (m.IsEventMethod())
+			return getEventForMethod(m).IsGeneratedCode();
+
+		return m.DeclaringType.IsGeneratedCode();
+	}
+
+	public static bool IsGeneratedCode(this EventDefinition e) => e.HasCustomAttributes && e.CustomAttributes.Any(a => generatedCodeAttributes.Contains(a.AttributeType.FullName)) || e.DeclaringType.IsGeneratedCode();
+
+	public static bool IsGeneratedCode(this PropertyDefinition p) => p.HasCustomAttributes && p.CustomAttributes.Any(a => generatedCodeAttributes.Contains(a.AttributeType.FullName)) || p.DeclaringType.IsGeneratedCode();
 
 	public static bool IsNamespaceDocPlaceholder(this TypeDefinition t) => t.Name == "NamespaceDoc";
 
