@@ -16,7 +16,8 @@
 		<Copy SourceFiles="@(DocFileItem)" DestinationFiles="@(_InheritDocBackupFile)" />
 
 		<ItemGroup>
-			<FileWrites Include="@(_InheritDocBackupFile)" Condition="Exists('@(_InheritDocBackupFile)')" />
+			<FileWrites Condition="Exists('@(_InheritDocBackupFile)')" Include="@(_InheritDocBackupFile)" />
+			<InheritDocReference Condition="'$(TargetFramework)'=='netstandard2.0'" Include="$(_InheritDocNetStandardFallback)" />
 		</ItemGroup>
 
 		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" InDocPath="@(_InheritDocBackupFile)" OutDocPath="@(DocFileItem)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />

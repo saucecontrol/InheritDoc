@@ -251,8 +251,8 @@ If your internal types/members are available to other assemblies (by means of `I
 InheritDoc will automatically discover XML documentation files alongside assemblies referenced by your project.  If necessary, additional XML documentation files can be manually included with `InheritDocReference`.  For example:
 
 ```XML
-<ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-    <InheritDocReference Include="\path\to\netstandard2.1.xml" />
+<ItemGroup>
+    <InheritDocReference Include="\path\to\somedocs.xml" />
     <InheritDocReference Include="\path\to\moredocs.xml" />
 </ItemGroup>
 ```
@@ -286,8 +286,8 @@ This will automatically name your XML file with the same base as the assembly na
 Warnings can be selectively disabled with the MSBuild standard `NoWarn` property.  For example:
 
 ```XML
-<PropertyGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-    <NoWarn>$(NoWarn);IDT001</NoWarn>
+<PropertyGroup>
+    <NoWarn>$(NoWarn);IDT002</NoWarn>
 </PropertyGroup>
 ```
 
@@ -299,28 +299,6 @@ Warnings can be selectively disabled with the MSBuild standard `NoWarn` property
 |IDT002| Indicates incomplete XML docs for the target assembly or one of its external references. i.e. an inheritance candidate was identified but had no documentaion to inherit. |
 |IDT003| May indicate you used `<inheritdoc />` on a type/member with no identifiable base. You may correct this warning by using the `cref` attribute to identify the base explicitly. |
 |IDT004| May indicate an incorrect XPath value in a `path` attribute or a duplicate/superfluous or self-referencing `<inheritdoc />` tag. |
-
-Known Issues
-------------
-
-### Bad NETStandard Docs
-
-When targeting `netstandard2.0`, if you attempt to inherit docs from any types/members in the framework you will receive a warning from InheritDoc related to malformed XML in `netstandard.xml` and then subsequent warnings for each member whose documentation could not be found.  All shipping versions of `NETStandard.Library` v2.0 have bad XML documentation.  This has been corrected in `netstandard2.1` builds, but since InheritDoc resolves documentation based on assembly references at compile time, it will find the bad docs if you have a `netstandard2.0` target.
-
-If this displeases you, you may register your discontent by commenting on the [associated issue](https://github.com/dotnet/standard/issues/1527) in the NETStandard repo.  In the meantime, the following configuration will work around the issue.
-
-```XML
-<PropertyGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-    <NoWarn>$(NoWarn);IDT001</NoWarn>
-</PropertyGroup>
-
-<ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
-    <PackageDownload Include="NETStandard.Library.Ref" Version="[2.1.0]" />
-    <InheritDocReference Include="$([MSBuild]::EnsureTrailingSlash('$(NugetPackageRoot)'))netstandard.library.ref\2.1.0\ref\netstandard2.1\netstandard.xml" />
-</ItemGroup>
-```
-
-`PackageDownload` ensures the package is in the local NuGet cache without actually adding a dependency, and then the corrected/updated `netstandard.xml` is added as an explicit doc reference.  This will resolve the `IDT002` warnings.  The `IDT001` warning can then be ignored if it applies only to `netstandard.xml`.
 
 Troubleshooting
 ---------------

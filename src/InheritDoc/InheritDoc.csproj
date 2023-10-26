@@ -15,6 +15,7 @@
 
 	<ItemGroup>
 		<None Include="package\build\*" Pack="true" PackagePath="build;buildMultiTargeting" />
+		<None Include="package\*" Pack="true" PackagePath="tools" />
 		<None Include="$(OutputPath)\*\Mono.Cecil.dll" Pack="true" PackagePath="tools" />
 		<None Include="$(OutputPath)\*\System.ValueTuple.dll" Pack="true" PackagePath="tools" />
 	</ItemGroup>

@@ -60,6 +60,7 @@
 		<None Include="$(MSBuildThisFileDirectory)$(Owners).png" Pack="true" PackagePath="/" />
 		<None Include="$(ProjectRoot)readme.md" Pack="true" PackagePath="/" />
 		<None Include="$(RepositoryRoot)license" Pack="true" PackagePath="/" />
+		<None Include="$(RepositoryRoot)third-party-notices" Pack="true" PackagePath="/" />
 		<SourceRoot Include="$(RepositoryRoot)" />
 	</ItemGroup>
 

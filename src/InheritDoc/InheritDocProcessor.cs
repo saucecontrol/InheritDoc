@@ -8,6 +8,7 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using System.Security;
+using System.IO.Compression;
 using System.Collections.Generic;
 
 using Mono.Cecil;
@@ -420,7 +421,9 @@ internal class InheritDocProcessor
 			}
 			catch (XmlException ex)
 			{
-				logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in referenced doc: " + ex.Message);
+				// https://github.com/dotnet/standard/issues/1527
+				if (!Path.GetFileName(path).Equals("netstandard.xml", StringComparison.OrdinalIgnoreCase))
+					logger.Warn(ErrorCodes.BadXml, path, ex.LineNumber, ex.LinePosition, "XML parse error in referenced doc: " + ex.Message);
 			}
 		}
 
@@ -434,9 +437,12 @@ internal class InheritDocProcessor
 
 		try
 		{
-			rdr = new StreamReader(docPath);
-			xrd = XmlReader.Create(rdr, new XmlReaderSettings { IgnoreWhitespace = true, CloseInput = true });
+			if (Path.GetExtension(docPath).Equals(".gz", StringComparison.OrdinalIgnoreCase))
+				rdr = new StreamReader(new GZipStream(File.OpenRead(docPath), CompressionMode.Decompress));
+			else
+				rdr = new StreamReader(docPath);
 
+			xrd = XmlReader.Create(rdr, new XmlReaderSettings { IgnoreWhitespace = true, CloseInput = true });
 			if (!xrd.ReadToFollowing(DocElementNames.Doc.LocalName))
 			{
 				logger.Warn(ErrorCodes.BadXml, docPath, 0, 0, "Not a doc file");
