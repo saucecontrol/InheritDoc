@@ -1,4 +1,6 @@
-﻿using System;
+// Copyright © Clinton Ingram and Contributors.  Licensed under the MIT License.
+
+using System;
 using System.Linq;
 using System.Collections.Generic;
 
@@ -9,13 +11,13 @@ internal static class CecilExtensions
 	private const string compilerGeneratedAttribute = "System.Runtime.CompilerServices.CompilerGeneratedAttribute";
 
 	// These are ignored as the base for types, defaulting the doc inheritance target to an implemented interface instead.
-	private static readonly string[] ignoredBaseTypes = new[] {
+	private static readonly string[] ignoredBaseTypes = [
 		"System.Object",
 		"System.ValueType",
 		"System.Enum",
 		"System.Delegate",
 		"System.MulticastDelegate"
-	};
+	];
 
 	private static readonly IEnumerable<string> emptyStringEnumerable = new[] { string.Empty };
 
@@ -297,7 +299,7 @@ internal static class CecilExtensions
 			var resolver = new RefAssemblyResolver();
 			var rparams = new ReaderParameters { AssemblyResolver = resolver };
 
-			foreach (var assemblyFile in refAssemblies.Concat(new[] { mainAssembly }))
+			foreach (string assemblyFile in refAssemblies.Concat(new[] { mainAssembly }))
 			{
 				var assembly = AssemblyDefinition.ReadAssembly(assemblyFile, rparams);
 				resolver.cache[assembly.FullName] = assembly;
@@ -319,7 +321,7 @@ internal static class CecilExtensions
 			return match ?? throw new AssemblyResolutionException(name);
 		}
 
-		public AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters) => Resolve(name);
+		public AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters _) => Resolve(name);
 
 		public void Dispose()
 		{

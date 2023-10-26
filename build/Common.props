@@ -6,20 +6,22 @@
 		<RepositoryUrl>https://github.com/saucecontrol/InheritDoc</RepositoryUrl>
 		<Copyright>Copyright © 2019-$([System.DateTime]::Today.Year) $(Authors)</Copyright>
 		<Title>Automatic Documentation Inheritance Processing</Title>
+		<Description>Automatically replace &lt;inheritdoc /&gt; tags with inherited documentation at build time.  Integrates with MSBuild, so no command line tool or VS add-on is required.</Description>
 
 		<RootNamespace>$(MSBuildProjectName)</RootNamespace>
 		<AssemblyName>$(Owners).$(MSBuildProjectName)</AssemblyName>
 		<AssemblyTitle>$(MSBuildProjectName)</AssemblyTitle>
 		<Product>$(MSBuildProjectName)</Product>
 
-		<PackageIcon>package/$(Owners).png</PackageIcon>
+		<PackageIcon>$(Owners).png</PackageIcon>
+		<PackageReadmeFile>readme.md</PackageReadmeFile>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
 		<PackageTags>Inherit, XML, Documentation, Comments, MSBuild</PackageTags>
 		<PackageReleaseNotes>See $(RepositoryUrl)/releases for release-specific notes.</PackageReleaseNotes>
-		<PackageDescription>Automatically replace &lt;inheritdoc /&gt; tags with inherited documentation at build time.  Integrates with MSBuild, so no command line tool or VS add-on is required.</PackageDescription>
 
-		<LangVersion>9</LangVersion>
+		<LangVersion>12</LangVersion>
+		<WarningLevel>7</WarningLevel>
 		<Features>strict</Features>
 		<Nullable>annotations</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -27,11 +29,14 @@
 		<Configurations>Debug;Release;Dist</Configurations>
 		<Configuration Condition="'$(Configuration)'==''">Release</Configuration>
 
+		<ProjectRoot>$(MSBuildProjectDirectory)\</ProjectRoot>
 		<RepositoryRoot>$(MSBuildThisFileDirectory)..\</RepositoryRoot>
 		<BaseIntermediateOutputPath>$(RepositoryRoot)out\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-		<BaseOutputPath>$(RepositoryRoot)out\bin\$(MSBuildProjectName)\</BaseOutputPath>
+		<BaseOutputBinPath>$(RepositoryRoot)out\bin\</BaseOutputBinPath>
+		<BaseOutputPath>$(BaseOutputBinPath)$(MSBuildProjectName)\</BaseOutputPath>
 		<IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
 		<OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
+		<PackageOutputPath>$(RepositoryRoot)out\nuget\</PackageOutputPath>
 		<IntDir>$(IntermediateOutputPath)$(TargetFramework)\</IntDir>
 		<OutDir>$(OutputPath)$(TargetFramework)\</OutDir>
 
@@ -52,8 +57,9 @@
 	</PropertyGroup>
 
 	<ItemGroup Condition="'$(Configuration)'=='Dist' Or '$(Configuration)'=='Coverage'">
-		<None Include="$(MSBuildThisFileDirectory)$(Owners).png" Pack="true" PackagePath="package" />
-		<None Include="$(RepositoryRoot)license" Pack="true" PackagePath="package" />
+		<None Include="$(MSBuildThisFileDirectory)$(Owners).png" Pack="true" PackagePath="/" />
+		<None Include="$(ProjectRoot)readme.md" Pack="true" PackagePath="/" />
+		<None Include="$(RepositoryRoot)license" Pack="true" PackagePath="/" />
 		<SourceRoot Include="$(RepositoryRoot)" />
 	</ItemGroup>
 

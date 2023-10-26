@@ -1,4 +1,6 @@
-﻿using System;
+// Copyright © Clinton Ingram and Contributors.  Licensed under the MIT License.
+
+using System;
 using System.IO;
 using System.Text;
 using System.Linq;
@@ -30,14 +32,14 @@ internal class InheritDocProcessor
 
 	private static class DocAttributeNames
 	{
-		public static readonly XName _visited = XName.Get("_visited");
-		public static readonly XName _trimmed = XName.Get("_trimmed");
+		public static readonly XName _visited = XName.Get(nameof(_visited));
+		public static readonly XName _trimmed = XName.Get(nameof(_trimmed));
 		public static readonly XName Cref = XName.Get("cref");
 		public static readonly XName Name = XName.Get("name");
 		public static readonly XName Path = XName.Get("path");
 	}
 
-	private static readonly XName[] inheritSkipIfExists = new[] {
+	private static readonly XName[] inheritSkipIfExists = [
 		XName.Get("example"),
 		XName.Get("exclude"),
 		XName.Get("filterpriority"),
@@ -47,15 +49,15 @@ internal class InheritDocProcessor
 		XName.Get("returns"),
 		XName.Get("threadsafety"),
 		XName.Get("value")
-	 };
+	 ];
 
-	private static readonly XName[] inheritSkipIfMatch = new[] {
+	private static readonly XName[] inheritSkipIfMatch = [
 		XName.Get("cref"),
 		XName.Get("href"),
 		XName.Get("name"),
 		XName.Get("vref"),
 		XName.Get("xref")
-	};
+	];
 
 	private static readonly string refFolderToken = Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar;
 	private static readonly string libFolderToken = Path.DirectorySeparatorChar + "lib" + Path.DirectorySeparatorChar;
@@ -101,7 +103,7 @@ internal class InheritDocProcessor
 			beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count(dm => !dm.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed)));
 
 		var mem = default(XElement);
-		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(m => isInheritDocCandidate(m))) is not null)
+		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(isInheritDocCandidate)) is not null)
 			replaceInheritDoc(docPath, mem, docMap, docMembers, refDocs, logger);
 
 		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited)))
@@ -251,7 +253,7 @@ internal class InheritDocProcessor
 
 		foreach (var inh in mem.Descendants(DocElementNames.InheritDoc).ToArray())
 		{
-			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dml?.First().Cref;
+			string? cref = (string)inh.Attribute(DocAttributeNames.Cref) ?? dml?.FirstOrDefault()?.Cref;
 			if (string.IsNullOrEmpty(cref))
 			{
 				if (!mem.HasAttribute(DocAttributeNames._trimmed))
@@ -374,7 +376,7 @@ internal class InheritDocProcessor
 			return doc;
 
 		var docPaths = refAssemblies
-			.Select(path => Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + ".xml"))
+			.Select(path => Path.ChangeExtension(path, ".xml"))
 			.Concat(refAssemblies.Select(p => Path.GetDirectoryName(p)).Distinct().Select(p => Path.Combine(p!, "namespaces.xml"))
 			.Concat(refDocs));
 
@@ -478,17 +480,15 @@ internal class InheritDocProcessor
 
 	private static IEnumerable<XElement> findDocsByID(XElement container, string docID) => container.Elements(DocElementNames.Member).Where(m => (string)m.Attribute(DocAttributeNames.Name) == docID);
 
-	private class DocMatch
+	private class DocMatch(string cref)
 	{
 		private static readonly IReadOnlyDictionary<string, string> emptyMap = new Dictionary<string, string>();
 
-		public string Cref;
+		public string Cref = cref;
 		public IReadOnlyDictionary<string, string> TypeParamMap = emptyMap;
 		public IReadOnlyDictionary<string, string> ParamMap = emptyMap;
 		public bool HasReturn = false;
 		public bool HasValue = false;
-
-		public DocMatch(string cref) => Cref = cref;
 
 		public DocMatch(string cref, TypeReference t, TypeReference? bt = null) : this(cref)
 		{
@@ -501,7 +501,7 @@ internal class InheritDocProcessor
 					var ga = ((GenericInstanceType)bt).GenericArguments;
 					var rbt = bt.Resolve();
 
-					foreach (var tp in t.GenericParameters.Where(p => ga.Contains(p)))
+					foreach (var tp in t.GenericParameters.Where(ga.Contains))
 						tpm.Add(rbt.GenericParameters[ga.IndexOf(tp)].Name, tp.Name);
 				}
 				else
@@ -548,7 +548,7 @@ internal interface ILogger
 	void Warn(string code, string file, int line, int column, string msg);
 }
 
-internal class ErrorCodes
+internal static class ErrorCodes
 {
 	public const string BadXml = "IDT001";
 	public const string NoDocs = "IDT002";

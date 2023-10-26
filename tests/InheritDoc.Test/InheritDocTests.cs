@@ -1,3 +1,5 @@
+// Copyright © Clinton Ingram and Contributors.  Licensed under the MIT License.
+
 #pragma warning disable CS1591 // missing XML docs
 
 using System;
@@ -14,8 +16,8 @@ public class InheritDocTests
 {
 #if NET48
 	const string corlibPath = @".nuget\packages\microsoft.netframework.referenceassemblies.net48\1.0.0\build\.NETFramework\v4.8\mscorlib.dll";
-#elif NETCOREAPP3_1
-	const string corlibPath = @".nuget\packages\microsoft.netcore.app.ref\3.1.0\ref\netcoreapp3.1\System.Runtime.dll";
+#elif NET6_0
+	const string corlibPath = @".nuget\packages\microsoft.netcore.app.ref\7.0.0\ref\net7.0\System.Runtime.dll";
 #endif
 
 	static readonly string assemblyPath = typeof(InheritDocTests).Assembly.Location;
@@ -32,13 +34,13 @@ public class InheritDocTests
 		string outPathPrivateTrim = documentPath + ".privateTrim.after";
 
 		var log = new DebugLogger() as ILogger;
-		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, Array.Empty<string>(), ApiLevel.Internal, log);
+		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, [ ], ApiLevel.Internal, log);
 		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
 
-		(replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrim, referencePaths, Array.Empty<string>(), ApiLevel.Private, log);
+		(replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrim, referencePaths, [ ], ApiLevel.Private, log);
 		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
 		using var stmdocPrivateTrim = File.Open(outPathPrivateTrim, FileMode.Open);

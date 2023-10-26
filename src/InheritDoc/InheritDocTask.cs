@@ -1,4 +1,6 @@
-﻿using System;
+// Copyright © Clinton Ingram and Contributors.  Licensed under the MIT License.
+
+using System;
 using System.IO;
 using System.Collections.Generic;
 
@@ -52,16 +54,10 @@ public class InheritDocTask : Task
 		}
 	}
 
-	private class TaskLogger : ILogger
+	private class TaskLogger(TaskLoggingHelper helper, ICollection<string> noWarn) : ILogger
 	{
-		private readonly TaskLoggingHelper logger;
-		private readonly ICollection<string> noWarning;
-
-		public TaskLogger(TaskLoggingHelper helper, ICollection<string> noWarn)
-		{
-			logger = helper;
-			noWarning = noWarn;
-		}
+		private readonly TaskLoggingHelper logger = helper;
+		private readonly ICollection<string> noWarning = noWarn;
 
 		void ILogger.Write(ILogger.Severity severity, string msg)
 		{

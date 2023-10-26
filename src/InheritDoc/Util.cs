@@ -1,4 +1,6 @@
-﻿using System;
+// Copyright © Clinton Ingram and Contributors.  Licensed under the MIT License.
+
+using System;
 using System.IO;
 using System.Linq;
 using System.Xml;
@@ -15,7 +17,7 @@ internal static class Util
 	public static IEnumerable<T> SelectManyRecursive<T>(this IEnumerable<T> e, Func<T, IEnumerable<T>> selector) =>
 		e.Any() ? e.Concat(e.SelectMany(selector).SelectManyRecursive(selector)) : e;
 
-	public static bool HasAttribute(this XElement e, XName name) => !(e.Attribute(name) is null);
+	public static bool HasAttribute(this XElement e, XName name) => e.Attribute(name) is not null;
 
 	public static int SourceLine(this XElement e) => e is IXmlLineInfo li && li.HasLineInfo() ? li.LineNumber : 0;
 
