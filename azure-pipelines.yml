@@ -28,8 +28,11 @@ steps:
     version: 6.0.x
     performMultiLevelLookup: true
 
-- script: dotnet build src/InheritDoc -c Dist --version-suffix ci$(Build.BuildNumber)
+- script: dotnet build src/InheritDoc -c Dist -p:GeneratePackageOnBuild=false
   displayName: Build
+
+- script: dotnet build src/InheritDoc -c Dist --version-suffix ci$(Build.BuildNumber)
+  displayName: Pack
 
 - script: dotnet test tests/InheritDoc.Test -c Coverage
   displayName: Test
