@@ -78,7 +78,6 @@ internal class InheritDocProcessor
 		var doc = loadDoc(docPath);
 		var docMembers = doc.Root.Element(DocElementNames.Members);
 		int beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
-		int trimCount = 0;
 
 		if (beforeCount == 0 && trimLevel == ApiLevel.None)
 			return (0, 0, 0);
@@ -100,39 +99,33 @@ internal class InheritDocProcessor
 		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
 		logger.Write(ILogger.Severity.Diag, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
 
-		if (trimLevel > ApiLevel.None)
-			beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count(dm => !dm.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed)));
+		beforeCount = docMembers.Descendants(DocElementNames.InheritDoc).Count(dm => !dm.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._trimmed) || m.HasAttribute(DocAttributeNames._gencode)));
 
 		var mem = default(XElement);
 		while ((mem = docMembers.Elements(DocElementNames.Member).FirstOrDefault(isInheritDocCandidate)) is not null)
 			replaceInheritDoc(docPath, mem, docMap, docMembers, refDocs, logger);
 
-		foreach (var md in docMembers.Elements(DocElementNames.Member))
-		{
-			if (md.HasAttribute(DocAttributeNames._visited))
-				md.SetAttributeValue(DocAttributeNames._visited, null);
+		var totrim = docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._trimmed) || (m.HasAttribute(DocAttributeNames._gencode) && !m.Elements().Any(e => e.Name != DocElementNames.InheritDoc))).ToList();
+		int trimCount = totrim.Count;
 
-			if (md.HasAttribute(DocAttributeNames._gencode))
-				md.SetAttributeValue(DocAttributeNames._gencode, null);
+		foreach (var md in totrim)
+		{
+			string reason = md.HasAttribute(DocAttributeNames._gencode) && !md.Elements().Any(e => e.Name != DocElementNames.InheritDoc) ? "generated" : trimLevel == ApiLevel.Private ? "private" : "non-public";
+			logger.Write(ILogger.Severity.Diag, "Trimming " + reason + " doc: " + (string)md.Attribute(DocAttributeNames.Name));
+
+			if (md.PreviousNode.IsWhiteSpace())
+				md.PreviousNode.Remove();
+
+			md.Remove();
 		}
 
-		if (trimLevel > ApiLevel.None)
+		int afterCount = docMembers.Descendants(DocElementNames.InheritDoc).Count(dm => !dm.Ancestors(DocElementNames.Member).Any(m => m.HasAttribute(DocAttributeNames._gencode)));
+
+		foreach (var md in docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._visited) || m.HasAttribute(DocAttributeNames._gencode)))
 		{
-			var totrim = docMembers.Elements(DocElementNames.Member).Where(m => m.HasAttribute(DocAttributeNames._trimmed)).ToList();
-			trimCount = totrim.Count();
-
-			foreach (var md in totrim)
-			{
-				logger.Write(ILogger.Severity.Diag, "Trimming " + (trimLevel == ApiLevel.Private ? "private" : "non-public") + " doc: " + (string)md.Attribute(DocAttributeNames.Name));
-
-				if (md.PreviousNode.IsWhiteSpace())
-					md.PreviousNode.Remove();
-
-				md.Remove();
-			}
+			md.SetAttributeValue(DocAttributeNames._visited, null);
+			md.SetAttributeValue(DocAttributeNames._gencode, null);
 		}
-
-		int afterCount = docMembers.Descendants(DocElementNames.InheritDoc).Count();
 
 		using var writer = XmlWriter.Create(outPath, new XmlWriterSettings { Encoding = new UTF8Encoding(false), IndentChars = "    " });
 		doc.Save(writer);
@@ -181,9 +174,7 @@ internal class InheritDocProcessor
 
 				foreach (var bt in t.GetBaseCandidates())
 				{
-					var rbt = bt.Resolve();
-					string cref = rbt.GetDocID();
-
+					string cref = bt.Resolve().GetDocID();
 					if (dml.Count == 0 || crefs.Contains(cref))
 						dml.Add(new DocMatch(cref, t, bt));
 
@@ -205,14 +196,20 @@ internal class InheritDocProcessor
 				// If no docs for public explicit interface implementation, inject them
 				// including the whitespace they would have had if they had been there.
 				if (idx == 0 && (om?.DeclaringType.GetApiLevel() ?? ApiLevel.None) > trimLevel && t.GetApiLevel() > trimLevel && !findDocsByID(docMembers, memID).Any())
+				{
+					if (docMembers.LastNode.IsWhiteSpace())
+						docMembers.LastNode.Remove();
+
 					docMembers.Add(
-						new XText("    "),
+						new XText("\n        "),
 							new XElement(DocElementNames.Member,
 								new XAttribute(DocAttributeNames.Name, memID),
+								new XAttribute(DocAttributeNames._gencode, true),
 								new XText("\n            "), new XElement(DocElementNames.InheritDoc),
 							new XText("\n        ")),
 						new XText("\n    ")
 					);
+				}
 
 				var methDocs = findDocsByID(docMembers, memID);
 				if ((om?.DeclaringType.GetApiLevel() ?? m.GetApiLevel()) <= trimLevel)
@@ -234,7 +231,7 @@ internal class InheritDocProcessor
 					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
 					var dml = new List<DocMatch>();
 
-					var bases = om is not null ? (new[] { om }).Concat(m.GetBaseCandidates()) : m.GetBaseCandidates();
+					var bases = (om is not null ? (new[] { om }) : [ ]).Concat(m.GetBaseCandidates());
 					foreach (var (bm, cref) in bases.SelectMany(bm => bm.GetDocID().Select(d => (bm, d))))
 					{
 						if (dml.Count == 0 || crefs.Contains(cref))
