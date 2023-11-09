@@ -25,6 +25,7 @@ internal class InheritDocProcessor
 		public static readonly XName Members = XName.Get("members");
 		public static readonly XName Param = XName.Get("param");
 		public static readonly XName TypeParam = XName.Get("typeparam");
+		public static readonly XName TypeParamRef = XName.Get("typeparamref");
 		public static readonly XName Overloads = XName.Get("overloads");
 		public static readonly XName Redirect = XName.Get("redirect");
 		public static readonly XName Returns = XName.Get("returns");
@@ -338,6 +339,7 @@ internal class InheritDocProcessor
 				continue;
 
 			var ename = elem.Name;
+			string? pname = (string)elem.Attribute(DocAttributeNames.Name);
 
 			if (ename == DocElementNames.Returns && !dm.HasReturn || ename == DocElementNames.Value && !dm.HasValue)
 			{
@@ -345,20 +347,46 @@ internal class InheritDocProcessor
 				continue;
 			}
 
-			if (ename == DocElementNames.Param || ename == DocElementNames.TypeParam)
+			if (ename == DocElementNames.Param)
 			{
-				string? pname = (string)elem.Attribute(DocAttributeNames.Name);
-				var pmap = ename == DocElementNames.Param ? dm.ParamMap : dm.TypeParamMap;
-
-				if (!pmap.ContainsKey(pname))
+				if (!dm.ParamMap.ContainsKey(pname))
 				{
 					removeDoc(nodes, i);
 					continue;
 				}
 
-				elem.SetAttributeValue(DocAttributeNames.Name, pmap[pname]);
+				elem.SetAttributeValue(DocAttributeNames.Name, dm.ParamMap[pname]);
 				foreach (var pref in nodes.OfType<XElement>().DescendantNodesAndSelf().OfType<XElement>().Where(e => e.Name == (ename.LocalName + "ref") && (string)e.Attribute(DocAttributeNames.Name) == pname))
-					pref.SetAttributeValue(DocAttributeNames.Name, pmap[pname]);
+					pref.SetAttributeValue(DocAttributeNames.Name, dm.ParamMap[pname]);
+			}
+
+			if (ename == DocElementNames.TypeParam)
+			{
+				if (!dm.TypeParamMap.ContainsKey(pname) || dm.TypeParamMap[pname] is not GenericParameter)
+				{
+					removeDoc(nodes, i);
+					continue;
+				}
+
+				elem.SetAttributeValue(DocAttributeNames.Name, dm.TypeParamMap[pname].Name);
+			}
+
+			foreach (var tpr in elem.Descendants(DocElementNames.TypeParamRef).ToList())
+			{
+				if (!tpr.HasAttribute(DocAttributeNames.Name) || !dm.TypeParamMap.ContainsKey((string)tpr.Attribute(DocAttributeNames.Name)))
+				{
+					if ((tpr.PreviousNode?.IsWhiteSpace()).GetValueOrDefault())
+						tpr.PreviousNode!.Remove();
+
+					tpr.Remove();
+					continue;
+				}
+
+				var tr = dm.TypeParamMap[(string)tpr.Attribute(DocAttributeNames.Name)];
+				if (tr.IsGenericParameter)
+					tpr.SetAttributeValue(DocAttributeNames.Name, tr.Name);
+				else
+					tpr.ReplaceWith(new XElement("see", new XAttribute("cref", tr.GetDocID())));
 			}
 
 			// Doc inheritance rules built for compatibility with SHFB modulo the name change of the "select" attribute to "path"
@@ -504,36 +532,16 @@ internal class InheritDocProcessor
 	private class DocMatch(string cref)
 	{
 		private static readonly IReadOnlyDictionary<string, string> emptyMap = new Dictionary<string, string>();
+		private static readonly IReadOnlyDictionary<string, TypeReference> emptyTypeMap = new Dictionary<string, TypeReference>();
 
 		public string Cref = cref;
-		public IReadOnlyDictionary<string, string> TypeParamMap = emptyMap;
 		public IReadOnlyDictionary<string, string> ParamMap = emptyMap;
+		public IReadOnlyDictionary<string, TypeReference> TypeParamMap = emptyTypeMap;
 		public bool HasReturn = false;
 		public bool HasValue = false;
 
-		public DocMatch(string cref, TypeReference t, TypeReference? bt = null) : this(cref)
-		{
-			if (t.HasGenericParameters && (bt?.IsGenericInstance ?? true))
-			{
-				var tpm = new Dictionary<string, string>();
-
-				if (bt is not null)
-				{
-					var ga = ((GenericInstanceType)bt).GenericArguments;
-					var rbt = bt.Resolve();
-
-					foreach (var tp in t.GenericParameters.Where(ga.Contains))
-						tpm.Add(rbt.GenericParameters[ga.IndexOf(tp)].Name, tp.Name);
-				}
-				else
-				{
-					foreach (var tp in t.GenericParameters)
-						tpm.Add(tp.Name, tp.Name);
-				}
-
-				TypeParamMap = tpm;
-			}
-		}
+		public DocMatch(string cref, TypeDefinition t, TypeReference? bt = null) : this(cref) =>
+			TypeParamMap = t.GetTypeParamMap(bt?.Resolve()) ?? emptyTypeMap;
 
 		public DocMatch(string cref, MethodDefinition m, MethodDefinition? bm = null) : this(cref)
 		{
@@ -546,14 +554,14 @@ internal class InheritDocProcessor
 				ParamMap = pm;
 			}
 
+			var tpm = m.DeclaringType.GetTypeParamMap(bm?.DeclaringType);
 			if (m.HasGenericParameters)
 			{
-				var tpm = new Dictionary<string, string>();
+				tpm ??= [ ];
 				foreach (var tp in m.GenericParameters)
-					tpm.Add(bm?.GenericParameters[tp.Position].Name ?? tp.Name, tp.Name);
-
-				TypeParamMap = tpm;
+					tpm[bm?.GenericParameters[tp.Position].Name ?? tp.Name] = tp;
 			}
+			TypeParamMap = tpm ?? emptyTypeMap;
 
 			HasReturn = m.HasReturnValue();
 			HasValue = m.IsPropertyMethod();

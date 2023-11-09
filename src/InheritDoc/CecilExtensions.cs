@@ -32,7 +32,7 @@ internal static class CecilExtensions
 	// http://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/DocumentationComments/DocumentationCommentIDVisitor.cs
 	// http://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/DocumentationComments/DocumentationCommentIDVisitor.PartVisitor.cs
 	// Different compilers/tools generate different encodings, so we generate a list of candidates that includes each style.
-	public static string GetDocID(this TypeDefinition t) => encodeTypeName(t).Select(t => "T:" + t).First();
+	public static string GetDocID(this TypeReference t) => encodeTypeName(t).Select(t => "T:" + t).First();
 
 	public static IEnumerable<string> GetDocID(this EventDefinition e) => encodeTypeName(e.DeclaringType).SelectMany(t => encodeMemberName(e.Name).Select(m => "E:" + t + "." + m));
 
@@ -158,6 +158,68 @@ internal static class CecilExtensions
 			yield return md;
 	}
 
+	public static TypeReference? GetNextBase(this TypeDefinition t, TypeDefinition bt)
+	{
+		var rb = t;
+		do rb = rb.BaseType?.Resolve();
+		while (rb is not null && rb != bt);
+
+		if (rb == bt)
+			return t.BaseType!;
+
+		foreach (var i in t.Interfaces)
+		{
+			rb = i.InterfaceType.Resolve();
+			if (rb == bt || rb.GetNextBase(bt) is not null)
+				return i.InterfaceType;
+		}
+
+		return null;
+	}
+
+	public static Dictionary<string, TypeReference>? GetTypeParamMap(this TypeDefinition t, TypeDefinition? bt)
+	{
+		if (!t.HasGenericParameters && !(bt?.HasGenericParameters).GetValueOrDefault())
+			return null;
+
+		var ctm = new Dictionary<string, TypeReference>();
+
+		if ((bt?.HasGenericParameters).GetValueOrDefault())
+		{
+			var stack = new Stack<TypeReference>();
+			var nbt = (TypeReference)t;
+			var nrt = t;
+			do
+			{
+				nbt = nrt.GetNextBase(bt!);
+				if (nbt is null)
+					break;
+
+				nrt = nbt.Resolve();
+				stack.Push(nbt);
+			}
+			while (nrt != bt);
+
+			if (stack.Count != 0 && stack.Pop() is GenericInstanceType gi && gi.Resolve() == bt)
+			{
+				foreach (var gp in bt!.GenericParameters)
+					ctm[gp.Name] = gi.GenericArguments[gp.Position];
+			}
+
+			foreach (var gb in stack.Where(b => b.IsGenericInstance).Cast<GenericInstanceType>())
+			{
+				var rb = gb.Resolve();
+				foreach (var kv in ctm.Where(e => e.Value.IsGenericParameter && rb.GenericParameters.Contains(e.Value)).ToList())
+					ctm[kv.Key] = gb.GenericArguments[rb.GenericParameters.IndexOf((GenericParameter)kv.Value)];
+			}
+		}
+
+		foreach (var gp in t.GenericParameters.Where(p => !ctm.ContainsKey(p.Name)))
+			ctm.Add(gp.Name, gp);
+
+		return ctm;
+	}
+
 	private static ApiLevel getApiLevel(MethodDefinition? m) => m is null ? ApiLevel.None : m.IsPrivate ? ApiLevel.Private : m.IsAssembly || m.IsFamilyAndAssembly ? ApiLevel.Internal : ApiLevel.Public;
 
 	private static ApiLevel getApiLevel(FieldDefinition? f) => f is null ? ApiLevel.None : f.IsPrivate ? ApiLevel.Private : f.IsAssembly || f.IsFamilyAndAssembly ? ApiLevel.Internal : ApiLevel.Public;
@@ -172,8 +234,7 @@ internal static class CecilExtensions
 
 		while (bt is not null)
 		{
-			var rbt = (bt.IsGenericInstance ? ((GenericInstanceType)bt).ElementType : bt).Resolve();
-
+			var rbt = bt.Resolve();
 			if (bt.IsGenericInstance)
 			{
 				var gi = (GenericInstanceType)bt;
@@ -235,7 +296,7 @@ internal static class CecilExtensions
 		foreach (var pl in mp.Select(p => encodeTypeName(p.ParameterType)))
 			sl = sl.SelectMany(s => pl.Select(p => s + "," + p));
 
-		foreach (var s in sl)
+		foreach (string s in sl)
 			yield return "(" + s.Substring(1) + ")";
 	}
 
@@ -330,11 +391,11 @@ internal static class CecilExtensions
 
 		private RefAssemblyResolver() { }
 
-		private bool isCompatibleName(AssemblyNameReference name, AssemblyNameReference cname) =>
-			cname.Name == name.Name && cname.PublicKeyToken.SequenceEqual(name.PublicKeyToken) && cname.Version >= name.Version;
-
 		public AssemblyDefinition Resolve(AssemblyNameReference name)
 		{
+			static bool isCompatibleName(AssemblyNameReference name, AssemblyNameReference cname) =>
+				cname.Name == name.Name && cname.PublicKeyToken.SequenceEqual(name.PublicKeyToken) && cname.Version >= name.Version;
+
 			if (!cache.TryGetValue(name.FullName, out var match))
 				cache[name.FullName] = match = cache.Values.FirstOrDefault(c => isCompatibleName(name, c.Name));
 
