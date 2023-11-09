@@ -8,6 +8,7 @@ using System.Linq;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -23,6 +24,7 @@ public class InheritDocTests
 	static readonly string assemblyPath = typeof(InheritDocTests).Assembly.Location;
 	static readonly string documentPath = Path.Combine(Path.GetDirectoryName(assemblyPath), Path.GetFileNameWithoutExtension(assemblyPath) + ".xml");
 	static readonly string[] referencePaths = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), corlibPath.Replace('\\', Path.DirectorySeparatorChar)), typeof(InheritDocProcessor).Assembly.Location };
+	static readonly DebugLogger logger = new();
 
 	static XElement processedDocs;
 	static XElement processedDocsPrivateTrim;
@@ -33,15 +35,14 @@ public class InheritDocTests
 		string outPath = documentPath + ".after";
 		string outPathPrivateTrim = documentPath + ".privateTrim.after";
 
-		var log = new DebugLogger() as ILogger;
-		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, [ ], ApiLevel.Internal, log);
-		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
+		var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPath, referencePaths, [ ], ApiLevel.Internal, logger);
+		logger.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
 
 		using var stmdoc = File.Open(outPath, FileMode.Open);
 		processedDocs = XDocument.Load(stmdoc, LoadOptions.PreserveWhitespace).Root.Element("members");
 
-		(replaced, total, trimmed) = InheritDocProcessor.InheritDocs(assemblyPath, documentPath, outPathPrivateTrim, referencePaths, [ ], ApiLevel.Private, log);
-		log.Write(ILogger.Severity.Message, $"replaced {replaced} of {total} and removed {trimmed}");
+		var task = new InheritDocTask { AssemblyPath = assemblyPath, InDocPath = documentPath, OutDocPath = outPathPrivateTrim, RefAssemblyPaths = string.Join(";", referencePaths), TrimLevel = ApiLevel.Private.ToString(), Logger = logger };
+		task.Execute();
 
 		using var stmdocPrivateTrim = File.Open(outPathPrivateTrim, FileMode.Open);
 		processedDocsPrivateTrim = XDocument.Load(stmdocPrivateTrim, LoadOptions.PreserveWhitespace).Root.Element("members");
@@ -100,7 +101,7 @@ public class InheritDocTests
 	public void NestedGenericParamsAssigned()
 	{
 		var ele = getDocElement("M:" + GIG<string>.M_ID_MImplicit, "summary");
-		Assert.AreEqual("Method M", ele?.Value);
+		Assert.AreEqual("Method M ", ele?.Value);
 	}
 
 	[TestMethod]
@@ -125,10 +126,31 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
-	public void TypeParamRefRemapped()
+	public void MethodTypeParamRefRemapped()
 	{
 		var ele = getDocElement("M:" + GIG<string>.M_ID_MExplicit, "returns/typeparamref[@name='MT']");
 		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void MethodTypeParamRefRemappedFromClass()
+	{
+		var ele = getDocElement("M:" + GIG<string>.M_ID_MImplicit, "summary/typeparamref[@name='TT']");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void ClosedTypeParamRefReplaced()
+	{
+		var ele = getDocElement("P:" + GGI.P_ID, "value/see[@cref='T:System.String[]']");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void UnusedTypeParamsTrimmed()
+	{
+		var ele = getDocElement("T:" + D.T_ID, ".");
+		Assert.AreEqual(0, ele?.Elements("typeparam").Count() ?? 0);
 	}
 
 	[TestMethod]
@@ -183,7 +205,7 @@ public class InheritDocTests
 	[TestMethod]
 	public void ClassInheritsFromRefDocs()
 	{
-		var ele = getDocElement("T:" + GXI.T_ID, "summary");
+		var ele = getDocElement("T:" + GXI<string>.T_ID, "summary");
 		Assert.AreEqual("Provides support for lazy initialization.", ele?.Value);
 	}
 
@@ -297,6 +319,20 @@ public class InheritDocTests
 		Assert.IsNotNull(ele);
 	}
 
+	[TestMethod]
+	public void NoBaseWarning()
+	{
+		bool warn = logger.Warnings.Any(w => w.code == ErrorCodes.NoBase && w.msg.Contains("M:" + W.M_ID_NotInherited));
+		Assert.IsTrue(warn);
+	}
+
+	[TestMethod]
+	public void NoBaseWarningIgnoredForGenerated()
+	{
+		bool warn = logger.Warnings.Any(w => w.code == ErrorCodes.NoBase && w.msg.Contains("P:" + W.P_ID_NotInherited));
+		Assert.IsFalse(warn);
+	}
+
 	private static XElement? getDocElement(string docID, string xpath) =>
 		processedDocs.Elements("member").FirstOrDefault(m => (string)m.Attribute("name") == docID)?.XPathSelectElement(xpath);
 
@@ -305,12 +341,18 @@ public class InheritDocTests
 
 	private class DebugLogger : ILogger
 	{
-		void ILogger.Write(ILogger.Severity severity, string msg)
+		public readonly List<(string code, string msg)> Warnings = [ ];
+
+		public void Write(ILogger.Severity severity, string msg)
 		{
 			if (severity >= ILogger.Severity.Info)
 				Debug.WriteLine(msg);
 		}
 
-		void ILogger.Warn(string code, string file, int line, int column, string msg) => Debug.WriteLine(code + ": " + msg);
+		public void Warn(string code, string file, int line, int column, string msg)
+		{
+			Warnings.Add((code, msg));
+			Debug.WriteLine(code + ": " + msg);
+		}
 	}
 }

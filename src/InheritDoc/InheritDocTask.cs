@@ -23,33 +23,38 @@ public class InheritDocTask : Task
 	public string? NoWarn { get; set; }
 	public string? TrimLevel { get; set; }
 
+	internal ILogger? Logger { get; set; }
+
 	public override bool Execute()
 	{
 		try
 		{
-			var refPaths = RefAssemblyPaths?.Split(';') ?? Array.Empty<string>();
-			var addPaths = AdditionalDocPaths?.Split(';') ?? Array.Empty<string>();
-			var logger = new TaskLogger(Log, NoWarn?.Split(';') ?? Array.Empty<string>()) as ILogger;
+			var refPaths = RefAssemblyPaths?.Split(';') ?? [ ];
+			var addPaths = AdditionalDocPaths?.Split(';') ?? [ ];
 			var trim = (ApiLevel)Math.Min((int)(Enum.TryParse<ApiLevel>(TrimLevel, true, out var t) ? t : ApiLevel.Internal), (int)ApiLevel.Internal);
 
-			Log.LogCommandLine(MessageImportance.Normal,
-				typeof(InheritDocTask).Assembly.GetName().FullName +
+			string cmdargs = typeof(InheritDocTask).Assembly.GetName().FullName +
 				Environment.NewLine + nameof(AssemblyPath) + ": " + AssemblyPath +
 				Environment.NewLine + nameof(InDocPath) + ": " + InDocPath +
 				Environment.NewLine + nameof(OutDocPath) + ": " + OutDocPath +
 				Environment.NewLine + nameof(RefAssemblyPaths) + ": " + RefAssemblyPaths +
 				Environment.NewLine + nameof(AdditionalDocPaths) + ": " + AdditionalDocPaths +
-				Environment.NewLine + nameof(TrimLevel) + ": " + trim
-			);
+				Environment.NewLine + nameof(TrimLevel) + ": " + trim;
 
-			var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, logger);
+			Logger ??= new TaskLogger(Log, NoWarn?.Split(';') ?? [ ]);
+			if (BuildEngine is not null)
+				Log.LogCommandLine(MessageImportance.Normal, cmdargs);
 
-			logger.Write(ILogger.Severity.Message, $"{nameof(InheritDocTask)} replaced {replaced} of {total} inheritdoc tags {(trim > ApiLevel.None ? $"and removed {trimmed} {(trim == ApiLevel.Private ? "private" : "non-public")} member docs " : null)}in {Path.GetFullPath(OutDocPath)}");
+			var (replaced, total, trimmed) = InheritDocProcessor.InheritDocs(AssemblyPath, InDocPath, OutDocPath, refPaths, addPaths, trim, Logger);
+
+			Logger.Write(ILogger.Severity.Message, $"{nameof(InheritDocTask)} replaced {replaced} of {total} inheritdoc tags {(trim > ApiLevel.None ? $"and removed {trimmed} {(trim == ApiLevel.Private ? "private" : "non-public")} member docs " : null)}in {Path.GetFullPath(OutDocPath)}");
 			return true;
 		}
 		catch (Exception ex)
 		{
-			Log.LogErrorFromException(ex, true);
+			if (BuildEngine is not null)
+				Log.LogErrorFromException(ex, true);
+
 			return false;
 		}
 	}
