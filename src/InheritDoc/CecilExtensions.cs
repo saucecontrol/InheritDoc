@@ -407,7 +407,7 @@ internal static class CecilExtensions
 		public void Dispose()
 		{
 			foreach (var asm in cache.Values)
-				asm.Dispose();
+				asm?.Dispose();
 
 			cache.Clear();
 		}
