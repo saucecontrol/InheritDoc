@@ -230,9 +230,18 @@ internal class InheritDocProcessor
 					logger.Write(ILogger.Severity.Diag, "Processing DocID: " + memID);
 
 					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
-					var dml = new List<DocMatch>();
+					var bases = (om is not null ? (new[] { om }) : [ ]).Concat(m.GetBaseCandidates()).ToList();
 
-					var bases = (om is not null ? (new[] { om }) : [ ]).Concat(m.GetBaseCandidates());
+					// With C# primary constructors, the constructor does not have docs of its own. If we don't have a base
+					// or cref for a constructor, inject its declaring type as a cref so we don't warn about a missing base.
+					if (m.IsConstructor && bases.Count == 0 && crefs.Count == 0)
+					{
+						crefs.Add(m.DeclaringType.GetDocID());
+						foreach (var d in methDocs.Descendants(DocElementNames.InheritDoc))
+							d.SetElementValue(DocAttributeNames.Cref, m.DeclaringType.GetDocID());
+					}
+
+					var dml = new List<DocMatch>();
 					foreach (var (bm, cref) in bases.SelectMany(bm => bm.GetDocID().Select(d => (bm, d))))
 					{
 						if (dml.Count == 0 || crefs.Contains(cref))

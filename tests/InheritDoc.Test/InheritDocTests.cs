@@ -266,6 +266,13 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
+	public void PrimaryConstructorInheritsFromType()
+	{
+		var ele = getDocElement("M:" + PC.M_ID_ctor, "summary");
+		Assert.AreEqual("Class G ", ele?.Value);
+	}
+
+	[TestMethod]
 	public void InternalMembersTrimmed()
 	{
 		var ele = getDocElement("F:" + W.F_ID, "summary");

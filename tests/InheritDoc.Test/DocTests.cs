@@ -258,6 +258,16 @@ public class GII : IG<string>
 	unsafe public T[] M<T>(T* tp) where T : unmanaged => default;
 }
 
+/// <inheritdoc />
+/// <param name="s">Param s</param>
+public class PC(string s) : GGI
+{
+	new internal const string T_ID = nameof(PC);
+	internal const string M_ID_ctor = T_ID + ".#ctor(" + nameof(System) + "." + nameof(String) + ")";
+
+	string S => s;
+}
+
 /// <summary>
 ///     Class W
 ///     <see cref="B" />

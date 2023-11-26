@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<VersionPrefix>1.4.0</VersionPrefix>
-		<TargetFrameworks>netstandard2.0;net462</TargetFrameworks>
+		<TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
 	</PropertyGroup>
 
 	<PropertyGroup>
