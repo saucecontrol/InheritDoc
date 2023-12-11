@@ -3,24 +3,25 @@
 
 	<PropertyGroup>
 		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(Configuration)'!='debug' and '$(DesignTimeBuild)'!='true' and '$(BuildingForLiveUnitTesting)'!='true'">true</InheritDocEnabled>
+		<CopyDocumentationFileToOutputDirectory Condition=" '$(InheritDocEnabled)' == 'true' ">false</CopyDocumentationFileToOutputDirectory>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<_InheritDocBackupFile Include="@(DocFileItem -> '%(RootDir)%(Directory)%(Filename).original%(Extension)')" />
+	<ItemGroup Condition=" '$(InheritDocEnabled)' == 'true' ">
+		<!-- Force intermediate documentation file -->
+		<DocFileItem Remove="$(DocumentationFile)"/>
+		<DocFileItem Include="$(IntermediateOutputPath)$(AssemblyName).xml"/>
 	</ItemGroup>
 
-	<Target Name="_InheritDocPostProcess" AfterTargets="CoreCompile" DependsOnTargets="ResolveAssemblyReferences;CoreCompile;_CheckForCompileOutputs" Inputs="@(DocFileItem)" Outputs="@(_InheritDocBackupFile)" Condition="'$(InheritDocEnabled)'=='true' and '$(_DocumentationFileProduced)'=='true'">
+	<Target Name="_InheritDocPostProcess" AfterTargets="CoreCompile" DependsOnTargets="ResolveAssemblyReferences;CoreCompile;_CheckForCompileOutputs" Inputs="@(DocFileItem)" Outputs="@(FinalDocFile)" Condition="'$(InheritDocEnabled)'=='true' and '$(_DocumentationFileProduced)'=='true'">
 
 		<Message Importance="normal" Text="InheritDoc processing file: @(DocFileItem -> '%(Filename)%(Extension)')" />
 
-		<Copy SourceFiles="@(DocFileItem)" DestinationFiles="@(_InheritDocBackupFile)" />
-
 		<ItemGroup>
-			<FileWrites Condition="Exists('@(_InheritDocBackupFile)')" Include="@(_InheritDocBackupFile)" />
+			<FileWrites Condition="Exists('@(FinalDocFile)')" Include="@(FinalDocFile)" />
 			<InheritDocReference Condition="'$(TargetFramework)'=='netstandard2.0'" Include="$(_InheritDocNetStandardFallback)" />
 		</ItemGroup>
 
-		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" InDocPath="@(_InheritDocBackupFile)" OutDocPath="@(DocFileItem)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />
+		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" InDocPath="@(DocFileItem)" OutDocPath="@(FinalDocFile)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />
 
 	</Target>
 
