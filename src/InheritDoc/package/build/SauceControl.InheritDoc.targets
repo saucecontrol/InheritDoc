@@ -6,10 +6,10 @@
 		<CopyDocumentationFileToOutputDirectory Condition=" '$(InheritDocEnabled)' == 'true' ">false</CopyDocumentationFileToOutputDirectory>
 	</PropertyGroup>
 
-	<ItemGroup Condition=" '$(InheritDocEnabled)' == 'true' ">
+	<ItemGroup Condition="'$(InheritDocEnabled)'=='true' and '@(DocFileItem)'=='@(FinalDocFile)'">
 		<!-- Force intermediate documentation file -->
-		<DocFileItem Remove="$(DocumentationFile)"/>
-		<DocFileItem Include="$(IntermediateOutputPath)$(AssemblyName).xml"/>
+		<DocFileItem Remove="@(DocFileItem)"/>
+		<DocFileItem Include="@(FinalDocFile->'$(IntermediateOutputPath)%(Filename)%(Extension)')"/>
 	</ItemGroup>
 
 	<Target Name="_InheritDocPostProcess" AfterTargets="CoreCompile" DependsOnTargets="ResolveAssemblyReferences;CoreCompile;_CheckForCompileOutputs" Inputs="@(DocFileItem)" Outputs="@(FinalDocFile)" Condition="'$(InheritDocEnabled)'=='true' and '$(_DocumentationFileProduced)'=='true'">
