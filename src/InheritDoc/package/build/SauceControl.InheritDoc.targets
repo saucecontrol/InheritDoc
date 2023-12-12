@@ -3,11 +3,13 @@
 
 	<PropertyGroup>
 		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(Configuration)'!='debug' and '$(DesignTimeBuild)'!='true' and '$(BuildingForLiveUnitTesting)'!='true'">true</InheritDocEnabled>
-		<CopyDocumentationFileToOutputDirectory Condition=" '$(InheritDocEnabled)' == 'true' ">false</CopyDocumentationFileToOutputDirectory>
+
+		<!-- Let the InheritDocTask work as a replacement for the task copying the documentation file to the output. -->
+		<CopyDocumentationFileToOutputDirectory Condition="'$(InheritDocEnabled)'=='true'">false</CopyDocumentationFileToOutputDirectory>
 	</PropertyGroup>
 
 	<ItemGroup Condition="'$(InheritDocEnabled)'=='true' and '@(DocFileItem)'=='@(FinalDocFile)'">
-		<!-- Force intermediate documentation file -->
+		<!-- Force intermediate documentation file in order to enable incremental build. -->
 		<DocFileItem Remove="@(DocFileItem)"/>
 		<DocFileItem Include="@(FinalDocFile->'$(IntermediateOutputPath)%(Filename)%(Extension)')"/>
 	</ItemGroup>
