@@ -19,12 +19,14 @@
 		<Message Importance="normal" Text="InheritDoc processing file: @(DocFileItem -> '%(Filename)%(Extension)')" />
 
 		<ItemGroup>
-			<FileWrites Condition="Exists('@(FinalDocFile)')" Include="@(FinalDocFile)" />
 			<InheritDocReference Condition="'$(TargetFramework)'=='netstandard2.0'" Include="$(_InheritDocNetStandardFallback)" />
 		</ItemGroup>
 
 		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" InDocPath="@(DocFileItem)" OutDocPath="@(FinalDocFile)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />
 
+		<ItemGroup>
+			<FileWrites Condition="Exists('@(FinalDocFile)')" Include="@(FinalDocFile)" />
+		</ItemGroup>
 	</Target>
 
 </Project>
