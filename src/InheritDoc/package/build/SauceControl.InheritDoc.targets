@@ -2,7 +2,8 @@
 <Project>
 
 	<PropertyGroup>
-		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(Configuration)'!='debug' and '$(DesignTimeBuild)'!='true' and '$(BuildingForLiveUnitTesting)'!='true'">true</InheritDocEnabled>
+		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(Configuration)'!='debug'">true</InheritDocEnabled>
+		<InheritdocEnabled Condition="'$(DesignTimeBuild)'=='true' or '$(BuildingForLiveUnitTesting)'=='true'">false</InheritdocEnabled>
 	</PropertyGroup>
 
 	<!-- Ensure there is an intermediate doc file so InheritDocTask has distinct input and output, which allows the task to be skipped for incremental builds. -->
@@ -11,7 +12,7 @@
 		<DocFileItem Include="@(FinalDocFile->'$(IntermediateOutputPath)%(Filename)%(Extension)')"/>
 	</ItemGroup>
 
-	<Target Name="_InheritDocPostProcess" AfterTargets="CoreCompile" DependsOnTargets="ResolveAssemblyReferences;CoreCompile;_CheckForCompileOutputs" Inputs="@(DocFileItem)" Outputs="@(FinalDocFile)" Condition="'$(InheritDocEnabled)'=='true' and '$(_DocumentationFileProduced)'=='true'">
+	<Target Name="_InheritDocPostProcess" BeforeTargets="CopyFilesToOutputDirectory" DependsOnTargets="ResolveAssemblyReferences;CoreCompile;_CheckForCompileOutputs" Inputs="@(DocFileItem)" Outputs="@(FinalDocFile)" Condition="'$(InheritDocEnabled)'=='true' and '$(_DocumentationFileProduced)'=='true'">
 
 		<PropertyGroup Condition="'$(CopyDocumentationFileToOutputDirectory)'!='false'">
 			<_InheritDocCopyFile>true</_InheritDocCopyFile>
