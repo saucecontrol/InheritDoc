@@ -3,30 +3,34 @@
 
 	<PropertyGroup>
 		<InheritDocEnabled Condition="'$(InheritDocEnabled)'=='' and '$(Configuration)'!='debug' and '$(DesignTimeBuild)'!='true' and '$(BuildingForLiveUnitTesting)'!='true'">true</InheritDocEnabled>
-
-		<!-- Let the InheritDocTask work as a replacement for the task copying the documentation file to the output. -->
-		<CopyDocumentationFileToOutputDirectory Condition="'$(InheritDocEnabled)'=='true'">false</CopyDocumentationFileToOutputDirectory>
 	</PropertyGroup>
 
+	<!-- Ensure there is an intermediate doc file so InheritDocTask has distinct input and output, which allows the task to be skipped for incremental builds. -->
 	<ItemGroup Condition="'$(InheritDocEnabled)'=='true' and '@(DocFileItem)'=='@(FinalDocFile)'">
-		<!-- Force intermediate documentation file in order to enable incremental build. -->
 		<DocFileItem Remove="@(DocFileItem)"/>
 		<DocFileItem Include="@(FinalDocFile->'$(IntermediateOutputPath)%(Filename)%(Extension)')"/>
 	</ItemGroup>
 
 	<Target Name="_InheritDocPostProcess" AfterTargets="CoreCompile" DependsOnTargets="ResolveAssemblyReferences;CoreCompile;_CheckForCompileOutputs" Inputs="@(DocFileItem)" Outputs="@(FinalDocFile)" Condition="'$(InheritDocEnabled)'=='true' and '$(_DocumentationFileProduced)'=='true'">
 
-		<Message Importance="normal" Text="InheritDoc processing file: @(DocFileItem -> '%(Filename)%(Extension)')" />
+		<PropertyGroup Condition="'$(CopyDocumentationFileToOutputDirectory)'!='false'">
+			<_InheritDocCopyFile>true</_InheritDocCopyFile>
+			<CopyDocumentationFileToOutputDirectory>false</CopyDocumentationFileToOutputDirectory>
+		</PropertyGroup>
+
+		<Warning Condition="'$(_InheritDocCopyFile)'!='true'" Code="IDT901" Text="CopyDocumentationFileToOutputDirectory is set to false, so InheritDoc will not write to the output directory.  You should either set InheritDocEnabled to false or CopyDocumentationFileToOutputDirectory to true." />
+		<Message Condition="'$(_InheritDocCopyFile)'=='true'" Importance="normal" Text="InheritDoc processing file: @(DocFileItem->'%(Filename)%(Extension)')" />
 
 		<ItemGroup>
 			<InheritDocReference Condition="'$(TargetFramework)'=='netstandard2.0'" Include="$(_InheritDocNetStandardFallback)" />
 		</ItemGroup>
 
-		<InheritDocTask AssemblyPath="@(IntermediateAssembly)" InDocPath="@(DocFileItem)" OutDocPath="@(FinalDocFile)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />
+		<InheritDocTask Condition="'$(_InheritDocCopyFile)'=='true'" AssemblyPath="@(IntermediateAssembly)" InDocPath="@(DocFileItem)" OutDocPath="@(FinalDocFile)" RefAssemblyPaths="@(_ResolveAssemblyReferenceResolvedFiles)" AdditionalDocPaths="@(InheritDocReference)" NoWarn="$(NoWarn)" TrimLevel="$(InheritDocTrimLevel)" />
 
 		<ItemGroup>
 			<FileWrites Condition="Exists('@(FinalDocFile)')" Include="@(FinalDocFile)" />
 		</ItemGroup>
+
 	</Target>
 
 </Project>
