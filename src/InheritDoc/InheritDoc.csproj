@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<VersionPrefix>1.4.0</VersionPrefix>
-		<TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
+		<VersionPrefix>2.0.0</VersionPrefix>
+		<TargetFrameworks>netstandard2.0</TargetFrameworks>
 	</PropertyGroup>
 
 	<PropertyGroup>
+		<MinClientVersion>5.0</MinClientVersion>
 		<DevelopmentDependency>true</DevelopmentDependency>
 		<BuildOutputTargetFolder>tools</BuildOutputTargetFolder>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -13,23 +14,21 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Include="package\build\*" Pack="true" PackagePath="build;buildMultiTargeting" />
+		<None Include="package\build\*" Pack="true" PackagePath="build" />
 		<None Include="package\*" Pack="true" PackagePath="tools" />
 		<None Include="$(OutputPath)\*\Mono.Cecil.dll" Pack="true" PackagePath="tools" />
-		<None Include="$(OutputPath)\*\System.ValueTuple.dll" Pack="true" PackagePath="tools" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.9.20" />
+		<PackageReference Include="Microsoft.Build.Utilities.Core" Version="16.0.461" />
 		<PackageReference Include="Mono.Cecil" Version="0.11.5" PrivateAssets="all" />
-		<PackageReference Condition="$(DefineConstants.Contains('NETFRAMEWORK'))" Include="System.ValueTuple" Version="4.5.0" />
 		<!-- these are for use in the test project, downloaded here to avoid version conflicts when building tests -->
 		<PackageDownload Include="Microsoft.NETCore.App.Ref" Version="[7.0.0]" />
 		<PackageDownload Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="[1.0.0]" />
 	</ItemGroup>
 
 	<Target Name="VerifyPackDependencies" BeforeTargets="GenerateNuspec">
-		<Error Condition="@(None->WithMetadataValue('Pack', 'true')->WithMetadataValue('Filename', 'Mono.Cecil')->Count()) != 2" Text="Dependencies were not present for pack. Start build again." />
+		<Error Condition="@(None->WithMetadataValue('Pack', 'true')->WithMetadataValue('Filename', 'Mono.Cecil')->Count()) != 1" Text="Dependencies were not present for pack. Start build again." />
 	</Target>
 
 </Project>

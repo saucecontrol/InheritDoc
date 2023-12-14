@@ -19,6 +19,7 @@
 			<CopyDocumentationFileToOutputDirectory>false</CopyDocumentationFileToOutputDirectory>
 		</PropertyGroup>
 
+		<Warning Condition="'$(MSBuildVersion)'=='' or '$(MSBuildVersion)'&lt;'16.0'" Code="IDT900" Text="InheritDoc is not compatible with this MSBuild version.  Use a 1.x version of the package if you need VS 2017 support." />
 		<Warning Condition="'$(_InheritDocCopyFile)'!='true'" Code="IDT901" Text="CopyDocumentationFileToOutputDirectory is set to false, so InheritDoc will not write to the output directory.  You should either set InheritDocEnabled to false or CopyDocumentationFileToOutputDirectory to true." />
 		<Message Condition="'$(_InheritDocCopyFile)'=='true'" Importance="normal" Text="InheritDoc processing file: @(DocFileItem->'%(Filename)%(Extension)')" />
 

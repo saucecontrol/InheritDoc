@@ -2,9 +2,7 @@
 <Project>
 
 	<PropertyGroup>
-		<_InheritDocTaskTfm Condition="'$(MSBuildRuntimeType)'!='Core'">net46</_InheritDocTaskTfm>
-		<_InheritDocTaskTfm Condition="'$(MSBuildRuntimeType)'=='Core'">netstandard2.0</_InheritDocTaskTfm>
-		<_InheritDocTaskLib>$(MSBuildThisFileDirectory)..\tools\$(_InheritDocTaskTfm)\SauceControl.InheritDoc.dll</_InheritDocTaskLib>
+		<_InheritDocTaskLib>$(MSBuildThisFileDirectory)..\tools\netstandard2.0\SauceControl.InheritDoc.dll</_InheritDocTaskLib>
 		<_InheritDocNetStandardFallback>$(MSBuildThisFileDirectory)..\tools\netstandard.xml.gz</_InheritDocNetStandardFallback>
 	</PropertyGroup>
 
