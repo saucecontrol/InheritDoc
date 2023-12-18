@@ -5,6 +5,7 @@ using System.Linq;
 using System.Collections.Generic;
 
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 internal static class CecilExtensions
 {
@@ -156,6 +157,18 @@ internal static class CecilExtensions
 
 		foreach (var md in m.DeclaringType.Interfaces.SelectMany(i => getBaseCandidatesFromType(m, i.InterfaceType)))
 			yield return md;
+	}
+
+	public static MethodDefinition? GetBaseConstructor(this MethodDefinition m)
+	{
+		foreach (var ins in m.Body.Instructions.Where(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference))
+		{
+			var tgt = ((MethodReference)ins.Operand).Resolve();
+			if (tgt.IsConstructor)
+				return tgt;
+		}
+
+		return null;
 	}
 
 	public static TypeReference? GetNextBase(this TypeDefinition t, TypeDefinition bt)

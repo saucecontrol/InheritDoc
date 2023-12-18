@@ -266,10 +266,10 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
-	public void PrimaryConstructorInheritsFromType()
+	public void PrimaryConstructorInheritsFromBase()
 	{
 		var ele = getDocElement("M:" + PC.M_ID_ctor, "summary");
-		Assert.AreEqual("Class G ", ele?.Value);
+		Assert.AreEqual("Constructor GG", ele?.Value);
 	}
 
 	[TestMethod]

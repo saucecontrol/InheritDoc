@@ -137,6 +137,7 @@ internal class InheritDocProcessor
 	private static IDictionary<string, IEnumerable<DocMatch>> generateDocMap(IList<TypeDefinition> types, XElement docMembers, ApiLevel trimLevel, ILogger logger)
 	{
 		var docMap = new Dictionary<string, IEnumerable<DocMatch>>();
+		var nodeComparer = new XNodeEqualityComparer();
 
 		foreach (var t in types)
 		{
@@ -232,13 +233,36 @@ internal class InheritDocProcessor
 					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
 					var bases = (om is not null ? (new[] { om }) : [ ]).Concat(m.GetBaseCandidates()).ToList();
 
-					// With C# primary constructors, the constructor does not have docs of its own. If we don't have a base
-					// or cref for a constructor, inject its declaring type as a cref so we don't warn about a missing base.
-					if (m.IsConstructor && bases.Count == 0 && crefs.Count == 0)
+					// Fix up docs for C# primary constructors, which do not have docs of their own and therefore should not get warnings for missing base.
+					if (m.IsConstructor && bases.Count == 0 && crefs.Count == 0 && memDocs.Any())
 					{
-						crefs.Add(m.DeclaringType.GetDocID());
-						foreach (var d in methDocs.Descendants(DocElementNames.InheritDoc))
-							d.SetElementValue(DocAttributeNames.Cref, m.DeclaringType.GetDocID());
+						var typeDoc = memDocs.First();
+						var ctorDoc = methDocs.First();
+						ctorDoc.SetAttributeValue(DocAttributeNames.Name, typeID);
+
+						// Type and constructor having identical docs is the surest sign of a primary constructor.
+						// We'll find a suitable base for the ctor and inject a cref pointing to it.
+						if (nodeComparer.Equals(typeDoc, ctorDoc))
+						{
+							string cref = typeID;
+							if (m.GetBaseConstructor() is MethodDefinition bc && bc.GetDocID().SelectMany(d => findDocsByID(docMembers, d)).FirstOrDefault() is XElement bcd)
+								cref = (string)bcd.Attribute(DocAttributeNames.Name);
+
+							crefs.Add(cref);
+							foreach (var d in methDocs.Descendants(DocElementNames.InheritDoc))
+								d.SetElementValue(DocAttributeNames.Cref, cref);
+
+							// `param` elements meant for the constructor will also appear in the type's docs.
+							foreach (var param in typeDoc.Descendants(DocElementNames.Param).ToList())
+							{
+								if ((param.PreviousNode?.IsWhiteSpace()).GetValueOrDefault())
+									param.PreviousNode!.Remove();
+
+								param.Remove();
+							}
+						}
+
+						ctorDoc.SetAttributeValue(DocAttributeNames.Name, memID);
 					}
 
 					var dml = new List<DocMatch>();
