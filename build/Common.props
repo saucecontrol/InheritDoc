@@ -4,7 +4,7 @@
 		<Owners>SauceControl</Owners>
 		<Authors>Clinton Ingram</Authors>
 		<RepositoryUrl>https://github.com/saucecontrol/InheritDoc</RepositoryUrl>
-		<Copyright>Copyright © 2019-$([System.DateTime]::Today.Year) $(Authors)</Copyright>
+		<Copyright>Copyright © 2019-$([System.DateTime]::Today.Year) $(Authors) and Contributors</Copyright>
 		<Title>Automatic Documentation Inheritance Processing</Title>
 		<Description>Automatically replace &lt;inheritdoc /&gt; tags with inherited documentation at build time.  Integrates with MSBuild, so no command line tool or VS add-on is required.</Description>
 
@@ -13,7 +13,7 @@
 		<AssemblyTitle>$(MSBuildProjectName)</AssemblyTitle>
 		<Product>$(MSBuildProjectName)</Product>
 
-		<PackageIcon>$(Owners).png</PackageIcon>
+		<PackageIcon>icon.png</PackageIcon>
 		<PackageReadmeFile>readme.md</PackageReadmeFile>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
@@ -57,8 +57,8 @@
 	</PropertyGroup>
 
 	<ItemGroup Condition="'$(Configuration)'=='Dist' Or '$(Configuration)'=='Coverage'">
-		<None Include="$(MSBuildThisFileDirectory)$(Owners).png" Pack="true" PackagePath="/" />
-		<None Include="$(ProjectRoot)readme.md" Pack="true" PackagePath="/" />
+		<None Include="$(MSBuildThisFileDirectory)$(PackageIcon)" Pack="true" PackagePath="/" />
+		<None Include="$(ProjectRoot)$(PackageReadmeFile)" Pack="true" PackagePath="/" />
 		<None Include="$(RepositoryRoot)license" Pack="true" PackagePath="/" />
 		<None Include="$(RepositoryRoot)third-party-notices" Pack="true" PackagePath="/" />
 		<SourceRoot Include="$(RepositoryRoot)" />

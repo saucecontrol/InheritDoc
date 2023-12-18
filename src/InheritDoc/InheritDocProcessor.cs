@@ -226,34 +226,30 @@ internal class InheritDocProcessor
 						md.SetAttributeValue(DocAttributeNames._gencode, true);
 				}
 
-				if (methDocs.Descendants(DocElementNames.InheritDoc).Any())
+				if (methDocs.Any() && (m.IsConstructor || methDocs.Descendants(DocElementNames.InheritDoc).Any()))
 				{
-					logger.Write(ILogger.Severity.Diag, "Processing DocID: " + memID);
-
-					var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
-					var bases = (om is not null ? (new[] { om }) : [ ]).Concat(m.GetBaseCandidates()).ToList();
-
-					// Fix up docs for C# primary constructors, which do not have docs of their own and therefore should not get warnings for missing base.
-					if (m.IsConstructor && bases.Count == 0 && crefs.Count == 0 && memDocs.Any())
+					// Fix up docs for C# primary constructors, which result in type and constructor sharing docs.
+					if (m.IsConstructor && memDocs.Any())
 					{
 						var typeDoc = memDocs.First();
 						var ctorDoc = methDocs.First();
 						ctorDoc.SetAttributeValue(DocAttributeNames.Name, typeID);
 
-						// Type and constructor having identical docs is the surest sign of a primary constructor.
-						// We'll find a suitable base for the ctor and inject a cref pointing to it.
 						if (nodeComparer.Equals(typeDoc, ctorDoc))
 						{
-							string cref = typeID;
-							if (m.GetBaseConstructor() is MethodDefinition bc && bc.GetDocID().SelectMany(d => findDocsByID(docMembers, d)).FirstOrDefault() is XElement bcd)
-								cref = (string)bcd.Attribute(DocAttributeNames.Name);
+							// Find a suitable base for the ctor and inject a cref in order to avoid warning for missing base.
+							if (ctorDoc.Elements(DocElementNames.InheritDoc).Any())
+							{
+								string cref = typeID;
+								if (m.GetBaseConstructor() is MethodDefinition bc && bc.GetDocID().SelectMany(d => findDocsByID(docMembers, d)).FirstOrDefault() is XElement bcd)
+									cref = (string)bcd.Attribute(DocAttributeNames.Name);
 
-							crefs.Add(cref);
-							foreach (var d in methDocs.Descendants(DocElementNames.InheritDoc))
-								d.SetElementValue(DocAttributeNames.Cref, cref);
+								foreach (var d in ctorDoc.Elements(DocElementNames.InheritDoc).Where(i => !i.HasAttribute(DocAttributeNames.Cref)))
+									d.SetAttributeValue(DocAttributeNames.Cref, cref);
+							}
 
-							// `param` elements meant for the constructor will also appear in the type's docs.
-							foreach (var param in typeDoc.Descendants(DocElementNames.Param).ToList())
+							// Remove `param` elements meant for the constructor, which also appear in the type's docs.
+							foreach (var param in typeDoc.Elements(DocElementNames.Param).ToList())
 							{
 								if ((param.PreviousNode?.IsWhiteSpace()).GetValueOrDefault())
 									param.PreviousNode!.Remove();
@@ -265,23 +261,31 @@ internal class InheritDocProcessor
 						ctorDoc.SetAttributeValue(DocAttributeNames.Name, memID);
 					}
 
-					var dml = new List<DocMatch>();
-					foreach (var (bm, cref) in bases.SelectMany(bm => bm.GetDocID().Select(d => (bm, d))))
+					if (methDocs.Descendants(DocElementNames.InheritDoc).Any())
 					{
-						if (dml.Count == 0 || crefs.Contains(cref))
-							dml.Add(new DocMatch(cref, m, bm));
+						logger.Write(ILogger.Severity.Diag, "Processing DocID: " + memID);
 
-						if (crefs.Count == 0)
-							break;
+						var bases = (om is not null ? (new[] { om }) : []).Concat(m.GetBaseCandidates()).ToList();
+						var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
+						var dml = new List<DocMatch>();
+
+						foreach (var (bm, cref) in bases.SelectMany(bm => bm.GetDocID().Select(d => (bm, d))))
+						{
+							if (dml.Count == 0 || crefs.Contains(cref))
+								dml.Add(new DocMatch(cref, m, bm));
+
+							if (crefs.Count == 0)
+								break;
+						}
+
+						foreach (var cref in crefs.Where(c => !dml.Any(dm => dm.Cref == c)))
+							dml.Add(new DocMatch(cref, m));
+
+						if (dml.Count > 0)
+							docMap.Add(memID, dml);
+						else
+							logger.Write(ILogger.Severity.Info, "No inherit candidate for: " + memID);
 					}
-
-					foreach (var cref in crefs.Where(c => !dml.Any(dm => dm.Cref == c)))
-						dml.Add(new DocMatch(cref, m));
-
-					if (dml.Count > 0)
-						docMap.Add(memID, dml);
-					else
-						logger.Write(ILogger.Severity.Info, "No inherit candidate for: " + memID);
 				}
 			}
 

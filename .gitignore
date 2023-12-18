@@ -1,6 +1,2 @@
 .vs
-bin
-obj
 out
-TestResults
-BenchmarkDotNet.Artifacts
