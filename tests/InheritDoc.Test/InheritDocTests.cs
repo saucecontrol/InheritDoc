@@ -23,7 +23,7 @@ public class InheritDocTests
 
 	static readonly string assemblyPath = typeof(InheritDocTests).Assembly.Location;
 	static readonly string documentPath = Path.Combine(Path.GetDirectoryName(assemblyPath), Path.GetFileNameWithoutExtension(assemblyPath) + ".xml");
-	static readonly string[] referencePaths = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), corlibPath.Replace('\\', Path.DirectorySeparatorChar)), typeof(InheritDocProcessor).Assembly.Location };
+	static readonly string[] referencePaths = [ Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), corlibPath.Replace('\\', Path.DirectorySeparatorChar)), typeof(InheritDocProcessor).Assembly.Location ];
 	static readonly DebugLogger logger = new();
 
 	static XElement processedDocs;

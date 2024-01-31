@@ -24,7 +24,7 @@ internal static class CecilExtensions
 		"System.MulticastDelegate"
 	];
 
-	private static readonly IEnumerable<string> emptyStringEnumerable = new[] { string.Empty };
+	private static readonly IEnumerable<string> emptyStringEnumerable = [ string.Empty ];
 
 	// DocID generation and type/parameter encoding are described here:
 	// https://docs.microsoft.com/en-us/cpp/build/reference/dot-xml-file-processing
@@ -393,7 +393,7 @@ internal static class CecilExtensions
 			var resolver = new RefAssemblyResolver();
 			var rparams = new ReaderParameters { AssemblyResolver = resolver };
 
-			foreach (string assemblyFile in refAssemblies.Concat(new[] { mainAssembly }))
+			foreach (string assemblyFile in refAssemblies.Concat([ mainAssembly ]))
 			{
 				var assembly = AssemblyDefinition.ReadAssembly(assemblyFile, rparams);
 				resolver.cache[assembly.FullName] = assembly;

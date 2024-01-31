@@ -15,6 +15,10 @@ variables:
   disable.coverage.autogenerate: true
 
 steps:
+- checkout: self
+  fetchDepth: 1
+  fetchTags: false
+
 - task: UseDotNet@2
   displayName: Ensure 8.0 SDK
   inputs:
@@ -44,7 +48,7 @@ steps:
     targetdir: out/coverage/reports
     reporttypes: HtmlInline_AzurePipelines;Cobertura;Badges
 
-- task: NuGetAuthenticate@0
+- task: NuGetAuthenticate@1
   condition: ne(variables['Build.Reason'], 'PullRequest')
 
 - script: dotnet nuget push --source $(azureNuGet) --api-key AzureArtifacts out/nuget/*.nupkg

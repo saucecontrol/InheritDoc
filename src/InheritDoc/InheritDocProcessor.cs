@@ -142,7 +142,7 @@ internal class InheritDocProcessor
 		foreach (var t in types)
 		{
 			string typeID = t.GetDocID();
-			var memDocs = findDocsByID(docMembers, typeID);
+			var typeDocs = findDocsByID(docMembers, typeID);
 
 			if (t.IsGeneratedCode())
 			{
@@ -150,27 +150,27 @@ internal class InheritDocProcessor
 				// https://stackoverflow.com/questions/793210/xml-documentation-for-a-namespace
 				if (t.IsNamespaceDocPlaceholder())
 				{
-					foreach (var md in memDocs)
-						md.SetAttributeValue(DocAttributeNames.Name, "N:" + t.Namespace);
+					foreach (var td in typeDocs)
+						td.SetAttributeValue(DocAttributeNames.Name, "N:" + t.Namespace);
 
 					continue;
 				}
 
-				foreach (var md in memDocs)
-					md.SetAttributeValue(DocAttributeNames._gencode, true);
+				foreach (var td in typeDocs)
+					td.SetAttributeValue(DocAttributeNames._gencode, true);
 			}
 
 			if (t.GetApiLevel() <= trimLevel)
 			{
-				foreach (var md in memDocs)
-					md.SetAttributeValue(DocAttributeNames._trimmed, true);
+				foreach (var td in typeDocs)
+					td.SetAttributeValue(DocAttributeNames._trimmed, true);
 			}
 
-			if (memDocs.Descendants(DocElementNames.InheritDoc).Any())
+			if (typeDocs.Descendants(DocElementNames.InheritDoc).Any())
 			{
 				logger.Write(ILogger.Severity.Diag, "Processing DocID: " + typeID);
 
-				var crefs = memDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
+				var crefs = typeDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToList();
 				var dml = new List<DocMatch>();
 				docMap.Add(typeID, dml);
 
@@ -229,9 +229,9 @@ internal class InheritDocProcessor
 				if (methDocs.Any() && (m.IsConstructor || methDocs.Descendants(DocElementNames.InheritDoc).Any()))
 				{
 					// Fix up docs for C# primary constructors, which result in type and constructor sharing docs.
-					if (m.IsConstructor && memDocs.Any())
+					if (m.IsConstructor && typeDocs.Any())
 					{
-						var typeDoc = memDocs.First();
+						var typeDoc = typeDocs.First();
 						var ctorDoc = methDocs.First();
 						ctorDoc.SetAttributeValue(DocAttributeNames.Name, typeID);
 

@@ -28,7 +28,7 @@ internal static class Util
 		(n.NodeType is XmlNodeType.Text && string.IsNullOrWhiteSpace(((XText)n).Value));
 
 	public static IEnumerable<XNode> XPathSelectNodes(this XElement e, string xpath) =>
-		(e.XPathEvaluate(xpath) as IEnumerable)?.Cast<XNode>() ?? Enumerable.Empty<XNode>();
+		(e.XPathEvaluate(xpath) as IEnumerable)?.Cast<XNode>() ?? [ ];
 
 	// https://github.com/dotnet/roslyn/issues/13529#issuecomment-245097691
 	public static string ReplacePathSpecialFolder(string path)
