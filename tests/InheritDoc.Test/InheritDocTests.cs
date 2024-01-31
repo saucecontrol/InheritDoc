@@ -91,6 +91,13 @@ public class InheritDocTests
 	}
 
 	[TestMethod]
+	public void FieldInheritsRefDocs()
+	{
+		var ele = getDocElement("F:" + C.F_ID, "summary");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
 	public void ConstructorInherits()
 	{
 		var ele = getDocElement("M:" + GIG<string>.M_ID_ctor, "summary");
@@ -283,6 +290,20 @@ public class InheritDocTests
 	public void ProtectedMembersPreserved()
 	{
 		var ele = getDocElement("M:" + B.M_ID_P, "summary");
+		Assert.IsNotNull(ele);
+	}
+
+	[TestMethod]
+	public void EnumInherits()
+	{
+		var ele = getDocElement($"F:{nameof(E)}.{nameof(E.EI)}", "summary");
+		Assert.AreEqual("EM", ele?.Value);
+	}
+
+	[TestMethod]
+	public void EnumInheritsRefDocs()
+	{
+		var ele = getDocElement($"F:{nameof(E)}.{nameof(E.ES)}", "summary");
 		Assert.IsNotNull(ele);
 	}
 

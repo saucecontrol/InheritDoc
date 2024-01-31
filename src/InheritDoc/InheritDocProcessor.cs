@@ -94,9 +94,10 @@ internal class InheritDocProcessor
 		;
 
 		var docMap = generateDocMap(types, docMembers, trimLevel, logger);
+		var docCref = docMembers.Elements(DocElementNames.Member).Where(m => !m.HasAttribute(DocAttributeNames._trimmed)).Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c));
 		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
 
-		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
+		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Concat(docCref).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
 		var refDocs = getRefDocs(refPaths, addPaths, refCref, logger);
 		logger.Write(ILogger.Severity.Diag, "External ref docs found: " + refDocs.Root.Elements(DocElementNames.Member).Count().ToString());
 

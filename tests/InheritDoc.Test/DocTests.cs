@@ -125,6 +125,10 @@ public class C : B, IZ
 	internal const string M_ID_N = T_ID + "." + nameof(N) + "(" + nameof(System) + "." + nameof(Int32) + ")";
 	internal const string P_ID = T_ID + "." + nameof(IZ) + "#" + nameof(IZ.P);
 	internal const string E_ID = T_ID + "." + nameof(IZ) + "#" + nameof(IZ.E);
+	internal const string F_ID = T_ID + "." + nameof(F);
+
+	/// <inheritdoc cref="String.Empty" />
+	public string F;
 
 	/// <inheritdoc />
 	public override void Y(int[,] q) { }
@@ -156,6 +160,17 @@ public struct D : IEquatable<D>
 
 	/// <inheritdoc />
 	public override int GetHashCode() => default;
+}
+
+/// <summary>Enum E</summary>
+public enum E
+{
+	/// <summary>EM</summary>
+	EM,
+	/// <inheritdoc cref="EM" />
+	EI,
+	/// <inheritdoc cref="AttributeTargets.Enum" />
+	ES
 }
 
 /// <inheritdoc />
