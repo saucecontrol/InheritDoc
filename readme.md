@@ -242,7 +242,7 @@ Alternatively, you can conditionally include the NuGet package only for specific
 
 ```XML
 <ItemGroup Condition="'$(Configuration)'=='Dist'">
-    <PackageReference Include="SauceControl.InheritDoc" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="SauceControl.InheritDoc" Version="2.*" PrivateAssets="all" />
 </ItemGroup>
 ```
 

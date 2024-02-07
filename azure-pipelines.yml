@@ -46,7 +46,7 @@ steps:
   inputs:
     reports: out/coverage/opencover*.xml
     targetdir: out/coverage/reports
-    reporttypes: HtmlInline_AzurePipelines;Cobertura;Badges
+    reporttypes: HtmlInline_AzurePipelines;Cobertura
 
 - task: NuGetAuthenticate@1
   condition: ne(variables['Build.Reason'], 'PullRequest')
