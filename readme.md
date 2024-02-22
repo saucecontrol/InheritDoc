@@ -295,6 +295,18 @@ The simpler configuration, supported in all multi-targeting capable SDK versions
 
 This will automatically name your XML file with the same base as the assembly name and will create it in the correct `obj` folder alongside the assembly.
 
+#### Using InheritDoc in Docker
+
+The .NET SDK Docker images set an environment variable that instructs the NuGet client not to extract XML documentation files during package restore.  This is done in the interest of time and space savings, as explained in https://github.com/dotnet/dotnet-docker/issues/2790, however this may prevent InheritDoc from resolving documentation from NuGet package references.
+
+The default behavior can be restored by clearing the environment variable in your own `Dockerfile`.
+
+```ini
+ENV NUGET_XMLDOC_MODE=
+```
+
+More documentation on the environment variables used by NuGet client can be found [here](https://learn.microsoft.com/en-us/nuget/reference/cli-reference/cli-ref-environment-variables).
+
 #### Disabling InheritDoc Build Warnings
 
 Warnings can be selectively disabled with the MSBuild standard `NoWarn` property.  For example:
