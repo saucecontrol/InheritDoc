@@ -94,7 +94,7 @@ internal class InheritDocProcessor
 		;
 
 		var docMap = generateDocMap(types, docMembers, trimLevel, logger);
-		var docCref = docMembers.Elements(DocElementNames.Member).Where(m => !m.HasAttribute(DocAttributeNames._trimmed)).Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c));
+		var docCref = docMembers.Elements(DocElementNames.Member).Where(m => !m.HasAttribute(DocAttributeNames._trimmed)).Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(isValidCref);
 		var asmTypes = types.Select(t => t.GetDocID()).ToHashSet();
 
 		var refCref = docMap.Values.SelectMany(v => v.Select(l => l.Cref)).Concat(docCref).Where(c => !asmTypes.Contains(getTypeIDFromDocID(c))).ToHashSet();
@@ -171,7 +171,7 @@ internal class InheritDocProcessor
 			{
 				logger.Write(ILogger.Severity.Diag, "Processing DocID: " + typeID);
 
-				var crefs = typeDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToList();
+				var crefs = typeDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(isValidCref).ToList();
 				var dml = new List<DocMatch>();
 				docMap.Add(typeID, dml);
 
@@ -267,7 +267,7 @@ internal class InheritDocProcessor
 						logger.Write(ILogger.Severity.Diag, "Processing DocID: " + memID);
 
 						var bases = (om is not null ? (new[] { om }) : []).Concat(m.GetBaseCandidates()).ToList();
-						var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(c => !string.IsNullOrWhiteSpace(c)).ToHashSet();
+						var crefs = methDocs.Descendants(DocElementNames.InheritDoc).Select(i => (string)i.Attribute(DocAttributeNames.Cref)).Where(isValidCref).ToHashSet();
 						var dml = new List<DocMatch>();
 
 						foreach (var (bm, cref) in bases.SelectMany(bm => bm.GetDocID().Select(d => (bm, d))))
@@ -554,6 +554,8 @@ internal class InheritDocProcessor
 			return null;
 		}
 	}
+
+	private static bool isValidCref(string cref) => cref is { Length: > 2 } && cref[0] is not '!' && (cref[0] is 'T' || cref.IndexOf('.', 2) > 0);
 
 	private static string getTypeIDFromDocID(string docID)
 	{
